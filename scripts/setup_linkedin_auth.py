@@ -19,6 +19,12 @@ from tools.linkedin.auth import (  # noqa: E402
     PlaywrightError,
     setup_linkedin_auth_state,
 )
+from tools.approval import (  # noqa: E402
+    APPROVE_MODE,
+    AUTO_MODE,
+    ApprovalRequest,
+    request_user_approval,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,14 +42,50 @@ def parse_args() -> argparse.Namespace:
         choices=("chromium", "firefox", "webkit"),
         help="Playwright browser engine to launch.",
     )
+    parser.add_argument(
+        "--mode",
+        choices=(AUTO_MODE, APPROVE_MODE),
+        default=None,
+        help=(
+            "Approval mode override. Defaults to OFFERGRAPH_TOOL_MODE or approve-mode."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    state_path = Path(args.state_path)
+    approval = request_user_approval(
+        ApprovalRequest(
+            action="linkedin-auth-setup",
+            reason=(
+                "LinkedIn automation needs a reusable Playwright session state before "
+                "it can open the composer as your account."
+            ),
+            automated_flow=(
+                "Open a visible Playwright browser, let you log in to LinkedIn manually, "
+                f"then save the session state to {state_path}."
+            ),
+            manual_steps=[
+                "Open LinkedIn in your browser and log in manually.",
+                "Run this script only when you want Playwright to save a reusable auth state.",
+                "Do not commit .auth/linkedin.json.",
+            ],
+        ),
+        mode=args.mode,
+        interactive=True,
+    )
+    if not approval.approved:
+        print(approval.message, file=sys.stderr)
+        print("Manual steps:", file=sys.stderr)
+        for index, step in enumerate(approval.manual_steps, start=1):
+            print(f"{index}. {step}", file=sys.stderr)
+        return 2
+
     try:
         state_path, current_url = setup_linkedin_auth_state(
-            state_path=Path(args.state_path),
+            state_path=state_path,
             browser_name=args.browser,
             stdout=sys.stdout,
         )
