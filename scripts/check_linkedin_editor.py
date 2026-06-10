@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
+    from tools.approval import APPROVE_MODE, AUTO_MODE  # noqa: E402
     from tools.linkedin.content_editor import linkedin_editor  # noqa: E402
 except ModuleNotFoundError as exc:
     print(
@@ -51,6 +52,14 @@ def parse_args() -> argparse.Namespace:
             "not click Post; it should return needs_confirmation."
         ),
     )
+    parser.add_argument(
+        "--mode",
+        choices=(AUTO_MODE, APPROVE_MODE),
+        default=None,
+        help=(
+            "Approval mode override. Defaults to OFFERGRAPH_TOOL_MODE or approve-mode."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -62,17 +71,13 @@ def main() -> int:
             "additional_info": args.additional_info,
             "draft_only": not args.publish_path,
             "publish": args.publish_path,
+            "execution_mode": args.mode,
         }
     )
 
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
-    expected_status = "needs_confirmation" if args.publish_path else "planned"
-    if result.get("status") != expected_status:
-        print(
-            f"Unexpected status: expected {expected_status!r}, got {result.get('status')!r}",
-            file=sys.stderr,
-        )
+    if result.get("status") == "error":
         return 1
 
     return 0

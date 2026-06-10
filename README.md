@@ -14,3 +14,24 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
+
+## Tool Approval Mode
+
+Tools default to `approve-mode`, which returns an approval request before running flows that need user consent.
+
+```bash
+export OFFERGRAPH_TOOL_MODE=approve-mode
+```
+
+Use `auto-mode` only when you want tools to skip approval gates:
+
+```bash
+export OFFERGRAPH_TOOL_MODE=auto-mode
+```
+
+To initialize LinkedIn auth state manually:
+
+```bash
+./.venv/bin/python -m playwright install chromium
+./.venv/bin/python scripts/setup_linkedin_auth.py
+```
