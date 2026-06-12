@@ -26,3 +26,19 @@ class PromptLoaderTest(TestCase):
 
         self.assertIn("Wed Jun 10, 2026", prompt)
         self.assertIn("research-agent", prompt)
+
+    def test_render_linkedin_master_prompt(self) -> None:
+        prompt = render_prompt(
+            "linkedin_master",
+            date="Fri Jun 12, 2026",
+            industry="AI infrastructure",
+            extra_need="include hiring-market impact",
+            brand_name="OfferGraph",
+            audience="technical founders",
+            tone="calm and practical",
+            publish_policy="draft_only",
+        )
+
+        self.assertIn("LINKEDIN MASTER", prompt)
+        self.assertIn("AI infrastructure", prompt)
+        self.assertIn("include hiring-market impact", prompt)
