@@ -59,8 +59,8 @@ class PlanMasterTest(TestCase):
     def test_plan_master_prompt_has_safe_industry_defaults(self) -> None:
         prompt = build_plan_master_prompt(PlanMasterConfig(date="Wed Jun 10, 2026"))
 
-        self.assertIn("the user's target industry", prompt)
-        self.assertIn("the user's additional content requirements", prompt)
+        self.assertIn("AI Engineer and Software Engineer", prompt)
+        self.assertIn("Good performance of https://github.com/siyuansdsd/OfferGraph", prompt)
 
     def test_build_research_subagent(self) -> None:
         subagent = build_research_subagent(PlanMasterConfig(date="Wed Jun 10, 2026"))
