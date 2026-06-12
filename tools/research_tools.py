@@ -21,6 +21,7 @@ from markdownify import markdownify
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
 
+from agent.model_selection import resolve_model_reference
 from agent.prompt import render_prompt
 from config.env import get_env, load_project_env
 from tools.state import PlanMasterState
@@ -110,11 +111,18 @@ def summarize_webpage_content(
         return SearchSummary(filename="empty_search_result.md", summary="No content.")
 
     try:
-        model_name = (
+        model_reference = (
             get_env(SEARCH_SUMMARIZER_MODEL_ENV, DEFAULT_SEARCH_SUMMARIZER_MODEL)
             or DEFAULT_SEARCH_SUMMARIZER_MODEL
         )
-        model = summarizer_model or init_chat_model(model=model_name)
+        resolved_model = (
+            resolve_model_reference(model_reference) or DEFAULT_SEARCH_SUMMARIZER_MODEL
+        )
+        model = summarizer_model or (
+            init_chat_model(model=resolved_model)
+            if isinstance(resolved_model, str)
+            else resolved_model
+        )
         structured_model = model.with_structured_output(SearchSummary)
         prompt = render_prompt(
             "summarize_web_search",

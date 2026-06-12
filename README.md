@@ -13,6 +13,31 @@ An Offer hunter ai agent team based on LangGraph, allowed monitor and future cus
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+Fill `.env` with local secrets:
+
+```bash
+TAVILY_API_KEY=...
+MINIMAX_API_KEY=...
+```
+
+## Agent Console
+
+Run the LinkedIn agent from a local console and choose `MiniMax-M2.7` or `MiniMax-M2.5`:
+
+```bash
+./.venv/bin/python scripts/agent_console.py --agent linkedin-master
+```
+
+Non-interactive example:
+
+```bash
+./.venv/bin/python scripts/agent_console.py \
+  --agent linkedin-master \
+  --model MiniMax-M2.7 \
+  --message "Write a concise OfferGraph LinkedIn post."
 ```
 
 ## Tool Approval Mode

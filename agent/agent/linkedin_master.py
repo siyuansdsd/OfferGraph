@@ -12,6 +12,7 @@ from typing import Any, Literal, Sequence
 from langchain.agents import create_agent
 from langchain_core.tools import BaseTool
 
+from agent.model_selection import resolve_model_reference
 from agent.prompt import render_prompt
 from config.env import get_env
 from tools.file_tools import ls, read_file, write_file
@@ -86,7 +87,7 @@ def create_linkedin_master_agent(
     extra_tools: Sequence[BaseTool] | None = None,
 ) -> Any:
     """Create the LinkedIn Master agent graph."""
-    active_model = model or get_default_model()
+    active_model = resolve_model_reference(model or get_default_model()) or DEFAULT_MODEL
     active_config = config or LinkedInMasterConfig()
     tools = [*get_linkedin_master_tools(), *(extra_tools or [])]
 
