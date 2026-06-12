@@ -6,7 +6,6 @@ through the LinkedIn editor tool, which owns auth approval and browser flow gate
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
@@ -14,6 +13,7 @@ from langchain.agents import create_agent
 from langchain_core.tools import BaseTool
 
 from agent.prompt import render_prompt
+from config.env import get_env
 from tools.file_tools import ls, read_file, write_file
 from tools.linkedin.content_editor import linkedin_editor
 from tools.research_tools import get_today_str, tavily_search, think_tool
@@ -49,7 +49,7 @@ class LinkedInMasterConfig:
 
 def get_default_model() -> str:
     """Return the default model identifier for LinkedIn Master."""
-    return os.getenv(DEFAULT_MODEL_ENV, DEFAULT_MODEL)
+    return get_env(DEFAULT_MODEL_ENV, DEFAULT_MODEL) or DEFAULT_MODEL
 
 
 def build_linkedin_master_prompt(config: LinkedInMasterConfig | None = None) -> str:

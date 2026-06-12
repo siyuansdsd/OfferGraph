@@ -7,7 +7,6 @@ research sub-agent delegation.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any, Sequence
 
@@ -22,6 +21,7 @@ from agent.agent.linkedin_master import (
     get_linkedin_master_tools,
 )
 from agent.prompt import render_prompt
+from config.env import get_env
 from tools.file_tools import ls, read_file, write_file
 from tools.research_tools import get_today_str, tavily_search, think_tool
 from tools.state import PlanMasterState
@@ -76,7 +76,7 @@ class PlanMasterConfig:
 
 def get_default_model() -> str:
     """Return the default model identifier for Plan Master."""
-    return os.getenv(DEFAULT_MODEL_ENV, DEFAULT_MODEL)
+    return get_env(DEFAULT_MODEL_ENV, DEFAULT_MODEL) or DEFAULT_MODEL
 
 
 def build_subagent_usage_instructions(config: PlanMasterConfig | None = None) -> str:

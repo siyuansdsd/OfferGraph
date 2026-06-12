@@ -7,11 +7,15 @@ from unittest.mock import Mock, patch
 import httpx
 
 from tools.research_tools import (
+    SEARCH_SUMMARIZER_MODEL_ENV,
+    TAVILY_API_KEY_ENV,
     SearchSummary,
     fetch_markdown_content,
     get_today_str,
     process_search_results,
+    run_tavily_search,
     sanitize_filename,
+    summarize_webpage_content,
     tavily_search,
     think_tool,
     unique_filename,
@@ -73,6 +77,44 @@ class ResearchToolsTest(TestCase):
                 }
             ],
         )
+
+    def test_run_tavily_search_reads_tavily_api_key_from_env(self) -> None:
+        fake_client = Mock()
+        fake_client.search.return_value = {"results": []}
+
+        with patch.dict("os.environ", {TAVILY_API_KEY_ENV: "test-key"}), patch(
+            "tools.research_tools.load_project_env",
+            return_value=True,
+        ), patch("tools.research_tools.TavilyClient", return_value=fake_client) as client_cls:
+            result = run_tavily_search("query", max_results=2, topic="news")
+
+        self.assertEqual(result, {"results": []})
+        client_cls.assert_called_once_with(api_key="test-key")
+        fake_client.search.assert_called_once_with(
+            "query",
+            max_results=2,
+            include_raw_content=True,
+            topic="news",
+        )
+
+    def test_summarize_webpage_content_reads_model_from_env(self) -> None:
+        structured_model = Mock()
+        structured_model.invoke.return_value = {
+            "filename": "summary.md",
+            "summary": "Short summary",
+        }
+        model = Mock()
+        model.with_structured_output.return_value = structured_model
+
+        with patch.dict("os.environ", {SEARCH_SUMMARIZER_MODEL_ENV: "test:model"}), patch(
+            "tools.research_tools.load_project_env",
+            return_value=True,
+        ), patch("tools.research_tools.init_chat_model", return_value=model) as init_mock:
+            summary = summarize_webpage_content("long webpage content")
+
+        init_mock.assert_called_once_with(model="test:model")
+        self.assertEqual(summary.filename, "summary.md")
+        self.assertEqual(summary.summary, "Short summary")
 
     def test_tavily_search_saves_files_to_command(self) -> None:
         with patch(

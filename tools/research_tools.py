@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from tavily import TavilyClient
 
 from agent.prompt import render_prompt
+from config.env import get_env, load_project_env
 from tools.state import PlanMasterState
 
 
@@ -29,6 +30,9 @@ SearchTopic = Literal["general", "news", "finance"]
 SearchRunner = Callable[[str, int, SearchTopic, bool], dict[str, Any]]
 ContentFetcher = Callable[[str], str]
 Summarizer = Callable[[str], "SearchSummary"]
+TAVILY_API_KEY_ENV = "TAVILY_API_KEY"
+SEARCH_SUMMARIZER_MODEL_ENV = "OFFERGRAPH_SEARCH_SUMMARIZER_MODEL"
+DEFAULT_SEARCH_SUMMARIZER_MODEL = "openai:gpt-4o-mini"
 
 
 class SearchSummary(BaseModel):
@@ -79,7 +83,15 @@ def run_tavily_search(
     client: TavilyClient | None = None,
 ) -> dict[str, Any]:
     """Perform a Tavily web search for a single query."""
-    tavily_client = client or TavilyClient()
+    if client is None:
+        load_project_env()
+        tavily_api_key = get_env(TAVILY_API_KEY_ENV, load=False)
+        tavily_client = (
+            TavilyClient(api_key=tavily_api_key) if tavily_api_key else TavilyClient()
+        )
+    else:
+        tavily_client = client
+
     return tavily_client.search(
         search_query,
         max_results=max_results,
@@ -98,7 +110,11 @@ def summarize_webpage_content(
         return SearchSummary(filename="empty_search_result.md", summary="No content.")
 
     try:
-        model = summarizer_model or init_chat_model(model="openai:gpt-4o-mini")
+        model_name = (
+            get_env(SEARCH_SUMMARIZER_MODEL_ENV, DEFAULT_SEARCH_SUMMARIZER_MODEL)
+            or DEFAULT_SEARCH_SUMMARIZER_MODEL
+        )
+        model = summarizer_model or init_chat_model(model=model_name)
         structured_model = model.with_structured_output(SearchSummary)
         prompt = render_prompt(
             "summarize_web_search",
@@ -243,8 +259,11 @@ def think_tool(reflection: str) -> str:
 
 
 __all__ = [
+    "DEFAULT_SEARCH_SUMMARIZER_MODEL",
     "SearchSummary",
     "SearchTopic",
+    "SEARCH_SUMMARIZER_MODEL_ENV",
+    "TAVILY_API_KEY_ENV",
     "fetch_markdown_content",
     "get_today_str",
     "process_search_results",

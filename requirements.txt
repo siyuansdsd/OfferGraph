@@ -14,3 +14,4 @@ httpx>=0.28.1
 markdownify>=1.2.0
 deepagents>=0.0.3
 playwright>=1.60.0
+python-dotenv>=1.0.0
