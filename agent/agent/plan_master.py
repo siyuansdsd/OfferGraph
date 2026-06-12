@@ -58,8 +58,8 @@ class PlanMasterConfig:
     max_concurrent_research_units: int = 3
     max_researcher_iterations: int = 3
     date: str | None = None
-    industry: str = "the user's target industry"
-    extra_need: str = "the user's additional content requirements"
+    industry: str = "AI Engineer and Software Engineer"
+    extra_need: str = "Good performance of https://github.com/siyuansdsd/OfferGraph , if there's some positive effect like stars and prs, can also talk about errors"
 
     @property
     def resolved_date(self) -> str:
