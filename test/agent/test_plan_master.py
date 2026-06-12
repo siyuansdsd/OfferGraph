@@ -8,8 +8,10 @@ from agent.agent.plan_master import (
     DEFAULT_MODEL_ENV,
     PLAN_MASTER_AGENT_NAME,
     RESEARCH_AGENT_NAME,
+    build_linkedin_subagent,
     PlanMasterConfig,
     build_plan_master_prompt,
+    build_plan_master_subagents,
     build_research_subagent,
     build_subagent_usage_instructions,
     create_plan_master_agent,
@@ -53,6 +55,7 @@ class PlanMasterTest(TestCase):
         self.assertIn("FILE SYSTEM USAGE", prompt)
         self.assertIn("SUB-AGENT DELEGATION", prompt)
         self.assertIn("plan-master", prompt)
+        self.assertIn("linkedin-master", prompt)
         self.assertIn("AI infrastructure", prompt)
         self.assertIn("include a hiring-market angle", prompt)
 
@@ -69,6 +72,29 @@ class PlanMasterTest(TestCase):
         self.assertIn("one topic at a time", subagent["description"])
         self.assertEqual([tool.name for tool in subagent["tools"]], ["tavily_search", "think_tool"])
         self.assertIn("Wed Jun 10, 2026", subagent["system_prompt"])
+
+    def test_build_linkedin_subagent(self) -> None:
+        subagent = build_linkedin_subagent(
+            PlanMasterConfig(
+                date="Wed Jun 10, 2026",
+                industry="fintech",
+                extra_need="focus on risk analysis",
+            )
+        )
+
+        self.assertEqual(subagent["name"], "linkedin-master")
+        self.assertIn("LinkedIn content creation", subagent["description"])
+        self.assertIn("fintech", subagent["system_prompt"])
+        self.assertIn("focus on risk analysis", subagent["system_prompt"])
+        self.assertIn("linkedin-editor", [tool.name for tool in subagent["tools"]])
+
+    def test_build_plan_master_subagents(self) -> None:
+        subagents = build_plan_master_subagents(PlanMasterConfig(date="Wed Jun 10, 2026"))
+
+        self.assertEqual(
+            [subagent["name"] for subagent in subagents],
+            ["research-agent", "linkedin-master"],
+        )
 
     def test_tool_sets(self) -> None:
         self.assertEqual(
@@ -105,7 +131,10 @@ class PlanMasterTest(TestCase):
         self.assertEqual(kwargs["model"], "test:model")
         self.assertEqual(kwargs["name"], PLAN_MASTER_AGENT_NAME)
         self.assertEqual([tool.name for tool in kwargs["tools"]], ["tavily_search", "think_tool"])
-        self.assertEqual(kwargs["subagents"][0]["name"], RESEARCH_AGENT_NAME)
+        self.assertEqual(
+            [subagent["name"] for subagent in kwargs["subagents"]],
+            [RESEARCH_AGENT_NAME, "linkedin-master"],
+        )
         self.assertIn("fintech", kwargs["system_prompt"])
         self.assertIn("make it concise", kwargs["system_prompt"])
 

@@ -15,6 +15,12 @@ from deepagents import create_deep_agent
 from langchain.agents import create_agent
 from langchain_core.tools import BaseTool
 
+from agent.agent.linkedin_master import (
+    LINKEDIN_MASTER_AGENT_NAME,
+    LinkedInMasterConfig,
+    build_linkedin_master_prompt,
+    get_linkedin_master_tools,
+)
 from agent.prompt import render_prompt
 from tools.file_tools import ls, read_file, write_file
 from tools.research_tools import get_today_str, tavily_search, think_tool
@@ -45,6 +51,7 @@ SUBAGENT_USAGE_TEMPLATE = """You can delegate focused research tasks to sub-agen
 
 Available delegation pattern:
 - Use `research-agent` for isolated research on one topic at a time.
+- Use `linkedin-master` for LinkedIn post strategy, image+text drafting, auth-aware draft preparation, and publishing handoff.
 - Use up to {max_concurrent_research_units} parallel research units when topics are independent.
 - Stop after {max_researcher_iterations} delegation rounds if evidence remains insufficient.
 - Today's date: {date}
@@ -132,6 +139,34 @@ def build_research_subagent(config: PlanMasterConfig | None = None) -> dict[str,
     }
 
 
+def build_linkedin_subagent(config: PlanMasterConfig | None = None) -> dict[str, Any]:
+    """Build LinkedIn content sub-agent configuration."""
+    active_config = config or PlanMasterConfig()
+    linkedin_config = LinkedInMasterConfig(
+        industry=active_config.industry,
+        extra_need=active_config.extra_need,
+        date=active_config.resolved_date,
+    )
+    return {
+        "name": LINKEDIN_MASTER_AGENT_NAME,
+        "description": (
+            "Delegate LinkedIn content creation, image brief drafting, auth-aware "
+            "LinkedIn draft preparation, and publishing handoff to this sub-agent."
+        ),
+        "system_prompt": build_linkedin_master_prompt(linkedin_config),
+        "tools": get_linkedin_master_tools(),
+    }
+
+
+def build_plan_master_subagents(config: PlanMasterConfig | None = None) -> list[dict[str, Any]]:
+    """Build all sub-agents available to Plan Master."""
+    active_config = config or PlanMasterConfig()
+    return [
+        build_research_subagent(active_config),
+        build_linkedin_subagent(active_config),
+    ]
+
+
 def create_plan_master_agent(
     model: str | Any | None = None,
     *,
@@ -150,7 +185,7 @@ def create_plan_master_agent(
             model=active_model,
             tools=get_research_tools(),
             system_prompt=system_prompt,
-            subagents=[build_research_subagent(active_config)],
+            subagents=build_plan_master_subagents(active_config),
             name=PLAN_MASTER_AGENT_NAME,
         )
 
@@ -172,6 +207,8 @@ __all__ = [
     "RESEARCH_AGENT_NAME",
     "SUBAGENT_USAGE_TEMPLATE",
     "TODO_USAGE_INSTRUCTIONS",
+    "build_linkedin_subagent",
+    "build_plan_master_subagents",
     "build_plan_master_prompt",
     "build_research_subagent",
     "build_researcher_prompt",
