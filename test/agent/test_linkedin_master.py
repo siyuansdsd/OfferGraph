@@ -45,6 +45,15 @@ class LinkedInMasterTest(TestCase):
         self.assertIn("Structured Output", prompt)
         self.assertIn("linkedin-editor", prompt)
 
+    def test_build_prompt_defaults_to_publish_after_confirmation(self) -> None:
+        prompt = build_linkedin_master_prompt(
+            LinkedInMasterConfig(date="Fri Jun 12, 2026")
+        )
+
+        self.assertIn("publish_after_confirmation", prompt)
+        self.assertIn("draft_only=false", prompt)
+        self.assertIn("publish=true", prompt)
+
     def test_tool_set_wires_auth_and_content_editor(self) -> None:
         self.assertEqual(
             [tool.name for tool in get_linkedin_master_tools()],

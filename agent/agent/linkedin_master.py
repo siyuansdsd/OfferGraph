@@ -39,7 +39,7 @@ class LinkedInMasterConfig:
     brand_name: str = "OfferGraph"
     audience: str = "job seekers, AI builders, and software engineers"
     tone: str = "practical, concise, analytical, and founder-style"
-    publish_policy: PublishPolicy = "draft_only"
+    publish_policy: PublishPolicy = "publish_after_confirmation"
     date: str | None = None
 
     @property
