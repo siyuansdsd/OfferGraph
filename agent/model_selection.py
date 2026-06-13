@@ -11,6 +11,7 @@ from config.env import get_env, load_project_env
 
 MINIMAX_API_KEY_ENV = "MINIMAX_API_KEY"
 CONSOLE_MODEL_ENV = "OFFERGRAPH_CONSOLE_MODEL"
+MINIMAX_MAX_TOKENS = 8192
 DEFAULT_CONSOLE_MODEL_CHOICE = "MiniMax-M2.7"
 DEFAULT_MODEL_CHOICE = "default"
 MINIMAX_MODEL_CHOICES = {
@@ -54,7 +55,7 @@ def create_minimax_model(choice: str) -> MiniMaxChat:
             "Missing MINIMAX_API_KEY. Add it to .env before using MiniMax."
         )
 
-    return MiniMaxChat(api_key=api_key, model=model_name)
+    return MiniMaxChat(api_key=api_key, model=model_name, max_tokens=MINIMAX_MAX_TOKENS)
 
 
 def resolve_model_reference(model: str | Any | None) -> str | Any | None:
@@ -77,6 +78,7 @@ __all__ = [
     "DEFAULT_CONSOLE_MODEL_CHOICE",
     "DEFAULT_MODEL_CHOICE",
     "MINIMAX_API_KEY_ENV",
+    "MINIMAX_MAX_TOKENS",
     "MINIMAX_MODEL_CHOICES",
     "create_minimax_model",
     "get_console_model_choice",

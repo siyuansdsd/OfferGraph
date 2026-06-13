@@ -8,6 +8,7 @@ from agent.model_selection import (
     DEFAULT_CONSOLE_MODEL_CHOICE,
     DEFAULT_MODEL_CHOICE,
     MINIMAX_API_KEY_ENV,
+    MINIMAX_MAX_TOKENS,
     create_minimax_model,
     get_console_model_choice,
     get_minimax_key,
@@ -45,7 +46,11 @@ class ModelSelectionTest(TestCase):
             model = create_minimax_model("MiniMax-M2.7")
 
         self.assertIs(model, fake_model)
-        chat_cls.assert_called_once_with(api_key="test-key", model="MiniMax-M2.7")
+        chat_cls.assert_called_once_with(
+            api_key="test-key",
+            model="MiniMax-M2.7",
+            max_tokens=MINIMAX_MAX_TOKENS,
+        )
 
     def test_create_minimax_model_requires_api_key(self) -> None:
         with patch.dict("os.environ", {}, clear=True), patch(
