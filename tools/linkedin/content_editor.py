@@ -1,24 +1,41 @@
-"""LinkedIn content editor LangChain tool.
-
-The tool contract is defined here, while browser automation and publishing are
-intentionally left behind explicit implementation points.
-"""
+"""LinkedIn content editor LangChain tool."""
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from langchain_core.tools import tool
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import sync_playwright
 from pydantic import BaseModel, Field
 
-from tools.approval import (
-    AUTO_MODE,
-    ApprovalRequest,
-    request_user_approval,
-)
+from tools.approval import ApprovalRequest, request_user_approval
+from tools.linkedin.auth import LINKEDIN_FEED_URL
 
 
 DEFAULT_LINKEDIN_SESSION_STATE_PATH = ".auth/linkedin.json"
 LINKEDIN_AUTH_SETUP_COMMAND = "./.venv/bin/python scripts/setup_linkedin_auth.py"
+COMPOSER_BUTTON_SELECTORS = (
+    'button:has-text("Start a post")',
+    'div[role="button"]:has-text("Start a post")',
+    '[aria-label*="Start a post"]',
+    'button[aria-label*="Create a post"]',
+    '[aria-label*="Create a post"]',
+    '[data-control-name="share.sharebox_focus"]',
+    ".share-box-feed-entry__trigger",
+)
+COMPOSER_EDITOR_SELECTORS = (
+    ".share-creation-state__text-editor .ql-editor[contenteditable='true']",
+    ".ql-editor[contenteditable='true']",
+    "[role='textbox'][contenteditable='true']",
+    "div[contenteditable='true']",
+)
+POST_BUTTON_SELECTORS = (
+    "button.share-actions__primary-action",
+    'button:has-text("Post")',
+    'button[aria-label*="Post"]',
+    '[data-control-name="share.post"]',
+)
+DEFAULT_PLAYWRIGHT_TIMEOUT_MS = 15_000
 
 
 class LinkedInEditorInput(BaseModel):
@@ -77,33 +94,176 @@ class LinkedInEditorResult(BaseModel):
     approval: dict[str, Any] | None = None
 
 
+class LinkedInEditorBrowserError(RuntimeError):
+    """Raised when LinkedIn browser automation cannot prepare a draft."""
+
+
 def open_linkedin_composer(
     session_state_path: str = DEFAULT_LINKEDIN_SESSION_STATE_PATH,
     *,
     headless: bool = False,
+    draft: str | None = None,
+    publish: bool = False,
+    wait_for_user: Callable[[str], str] | None = None,
+    confirm_publish: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
-    """Open LinkedIn's post composer with Playwright."""
-    raise NotImplementedError(
-        "TODO: use Playwright to load the saved LinkedIn session and open the post composer."
-    )
+    """Open LinkedIn's post composer, insert a draft, and optionally post it."""
+    resolved_state_path = Path(session_state_path).expanduser().resolve()
+    if not resolved_state_path.exists():
+        raise FileNotFoundError(f"LinkedIn auth state not found: {resolved_state_path}")
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=headless)
+        context = browser.new_context(storage_state=str(resolved_state_path))
+        page = context.new_page()
+        try:
+            page.goto(
+                LINKEDIN_FEED_URL,
+                wait_until="domcontentloaded",
+                timeout=60_000,
+            )
+            try:
+                page.wait_for_load_state(
+                    "networkidle",
+                    timeout=DEFAULT_PLAYWRIGHT_TIMEOUT_MS,
+                )
+            except PlaywrightError:
+                pass
+            if "linkedin.com/login" in page.url or "authwall" in page.url:
+                raise LinkedInEditorBrowserError(
+                    "LinkedIn session is missing or expired. Re-run auth setup."
+                )
+
+            composer_selector, composer_button = _first_visible_locator(
+                page,
+                COMPOSER_BUTTON_SELECTORS,
+                purpose="LinkedIn post composer button",
+            )
+            composer_button.click()
+
+            editor_selector, editor = _first_visible_locator(
+                page,
+                COMPOSER_EDITOR_SELECTORS,
+                purpose="LinkedIn post editor",
+            )
+            if draft:
+                _fill_linkedin_editor(page, editor, draft)
+
+            published = False
+            post_selector = None
+            publish_confirmed = False
+            if publish:
+                confirmer = confirm_publish or input
+                publish_confirmed = confirm_linkedin_publish(confirmer)
+                if publish_confirmed:
+                    post_selector, post_button = _first_visible_locator(
+                        page,
+                        POST_BUTTON_SELECTORS,
+                        purpose="LinkedIn post button",
+                    )
+                    post_button.click()
+                    published = True
+                    try:
+                        page.wait_for_load_state(
+                            "networkidle",
+                            timeout=DEFAULT_PLAYWRIGHT_TIMEOUT_MS,
+                        )
+                    except PlaywrightError:
+                        pass
+
+            current_url = page.url
+            if not headless and not published:
+                reviewer = wait_for_user or input
+                reviewer(
+                    "LinkedIn draft is open in the browser. "
+                    "Review it there, then press Enter here to close Playwright..."
+                )
+
+            return {
+                "url": current_url,
+                "composer_selector": composer_selector,
+                "editor_selector": editor_selector,
+                "draft_inserted": bool(draft),
+                "publish_requested": publish,
+                "publish_confirmed": publish_confirmed,
+                "published": published,
+                "post_selector": post_selector,
+            }
+        finally:
+            browser.close()
 
 
 def compose_post(task: str, additional_info: str | None = None) -> str:
-    """Write a LinkedIn post draft from the task and supporting information."""
-    raise NotImplementedError(
-        "TODO: connect this to the agent or model that drafts LinkedIn post content."
-    )
+    """Return the exact draft text that should be inserted into LinkedIn."""
+    if additional_info and additional_info.strip():
+        return additional_info.strip()
+    return task.strip()
 
 
 def publish_or_save_draft(
     draft: str,
     *,
     publish: bool = False,
+    browser_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Insert the draft into LinkedIn and optionally publish it."""
-    raise NotImplementedError(
-        "TODO: insert text into the composer and click Post only when publish=True."
+    """Return the publish status for a prepared draft."""
+    if publish:
+        if browser_result and browser_result.get("published"):
+            return {
+                "status": "published",
+                "message": (
+                    "Draft was prepared in LinkedIn and posted after y/n confirmation."
+                ),
+            }
+        return {
+            "status": "needs_confirmation",
+            "message": (
+                "Draft was prepared in LinkedIn, but terminal confirmation was not "
+                "granted. It was left unpublished."
+            ),
+        }
+
+    return {
+        "status": "draft_ready",
+        "message": "Draft was prepared in LinkedIn and left unpublished.",
+    }
+
+
+def confirm_linkedin_publish(input_func: Callable[[str], str] = input) -> bool:
+    """Ask for explicit terminal confirmation before clicking LinkedIn Post."""
+    answer = input_func(
+        "Post this LinkedIn draft now? Type y/yes to post, or n/no to leave it unpublished: "
     )
+    return answer.strip().lower() in {"y", "yes"}
+
+
+def _first_visible_locator(
+    page: Any,
+    selectors: tuple[str, ...],
+    *,
+    purpose: str,
+) -> tuple[str, Any]:
+    errors: list[str] = []
+    for selector in selectors:
+        locator = page.locator(selector).first
+        try:
+            locator.wait_for(state="visible", timeout=DEFAULT_PLAYWRIGHT_TIMEOUT_MS)
+            return selector, locator
+        except PlaywrightError as exc:
+            errors.append(f"{selector}: {exc}")
+
+    raise LinkedInEditorBrowserError(
+        f"Could not find {purpose}. Tried selectors: {', '.join(selectors)}. "
+        f"Details: {' | '.join(errors)}"
+    )
+
+
+def _fill_linkedin_editor(page: Any, editor: Any, draft: str) -> None:
+    editor.click()
+    try:
+        editor.fill(draft, timeout=DEFAULT_PLAYWRIGHT_TIMEOUT_MS)
+    except PlaywrightError:
+        page.keyboard.insert_text(draft)
 
 
 def build_linkedin_auth_approval_request(session_state_path: str) -> ApprovalRequest:
@@ -149,12 +309,26 @@ def check_linkedin_auth_approval(
             url="https://www.linkedin.com/feed/",
         ).model_dump(exclude_none=True)
     if decision.approved:
-        return None
+        message = (
+            "LinkedIn auth state is missing. Auto-mode cannot create it because "
+            "LinkedIn login requires your manual browser session. Run the setup steps."
+        )
+        return LinkedInEditorResult(
+            status="manual_required",
+            message=message,
+            url=LINKEDIN_FEED_URL,
+            approval={
+                **decision.model_dump(),
+                "status": "manual_required",
+                "approved": False,
+                "message": message,
+            },
+        ).model_dump(exclude_none=True)
 
     return LinkedInEditorResult(
         status=decision.status,
         message=decision.message,
-        url="https://www.linkedin.com/feed/",
+        url=LINKEDIN_FEED_URL,
         approval=decision.model_dump(),
     ).model_dump(exclude_none=True)
 
@@ -169,7 +343,7 @@ def linkedin_editor(
     headless: bool = False,
     execution_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Prepare a LinkedIn post workflow and optionally publish after confirmation."""
+    """Open LinkedIn, insert a draft, and leave it unpublished by default."""
     if publish and draft_only:
         return LinkedInEditorResult(
             status="error",
@@ -186,27 +360,31 @@ def linkedin_editor(
     if auth_approval_response is not None:
         return auth_approval_response
 
-    if publish:
-        status: Literal["needs_confirmation"] = "needs_confirmation"
-        message = (
-            "Publish mode was requested, but browser automation is not implemented yet. "
-            "The next implementation step is to open LinkedIn with Playwright, draft the "
-            "post, and click Post only after confirmation."
+    draft = compose_post(task, additional_info)
+    try:
+        browser_result = open_linkedin_composer(
+            session_state_path,
+            headless=headless,
+            draft=draft,
+            publish=publish,
         )
-    else:
-        status = "planned"
-        mode_note = (
-            f" {AUTO_MODE} bypassed the LinkedIn auth approval gate."
-            if execution_mode == AUTO_MODE
-            else ""
-        )
-        message = (
-            "linkedin-editor is defined. Implementation points are ready for opening "
-            f"LinkedIn, composing the post, and inserting it as a draft.{mode_note}"
-        )
+    except (FileNotFoundError, LinkedInEditorBrowserError, PlaywrightError) as exc:
+        return LinkedInEditorResult(
+            status="error",
+            message=str(exc),
+            draft=draft,
+            url=LINKEDIN_FEED_URL,
+        ).model_dump(exclude_none=True)
+
+    publish_decision = publish_or_save_draft(
+        draft,
+        publish=publish,
+        browser_result=browser_result,
+    )
 
     return LinkedInEditorResult(
-        status=status,
-        message=message,
-        url="https://www.linkedin.com/feed/",
+        status=publish_decision["status"],
+        message=publish_decision["message"],
+        draft=draft,
+        url=str(browser_result.get("url") or LINKEDIN_FEED_URL),
     ).model_dump(exclude_none=True)

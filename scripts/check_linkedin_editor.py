@@ -1,4 +1,4 @@
-"""Smoke test the linkedin-editor tool without publishing anything."""
+"""Smoke test the linkedin-editor tool with optional y/n publishing."""
 
 from __future__ import annotations
 
@@ -45,11 +45,13 @@ def parse_args() -> argparse.Namespace:
         help="Optional context, audience, facts, or tone instructions.",
     )
     parser.add_argument(
+        "--publish",
         "--publish-path",
+        dest="publish",
         action="store_true",
         help=(
-            "Exercise the publish request path. The current implementation still does "
-            "not click Post; it should return needs_confirmation."
+            "Open the publish request path. After the draft is inserted, the tool asks "
+            "for y/n terminal confirmation before clicking Post."
         ),
     )
     parser.add_argument(
@@ -69,8 +71,8 @@ def main() -> int:
         {
             "task": args.task,
             "additional_info": args.additional_info,
-            "draft_only": not args.publish_path,
-            "publish": args.publish_path,
+            "draft_only": not args.publish,
+            "publish": args.publish,
             "execution_mode": args.mode,
         }
     )
