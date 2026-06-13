@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from rich.console import Console
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -17,6 +19,11 @@ from agent.agent.linkedin_master import (  # noqa: E402
     create_linkedin_master_agent,
 )
 from agent.agent.plan_master import PlanMasterConfig, create_plan_master_agent  # noqa: E402
+from agent.execution_log import (  # noqa: E402
+    ExecutionFrame,
+    execution_events_from_chunk,
+    print_execution_frame,
+)
 from agent.model_selection import (  # noqa: E402
     DEFAULT_CONSOLE_MODEL_CHOICE,
     DEFAULT_MODEL_CHOICE,
@@ -115,6 +122,69 @@ def build_agent(agent_name: str, model: Any, industry: str, extra_need: str) -> 
     )
 
 
+def run_agent(
+    agent: Any,
+    agent_name: str,
+    message: str,
+    *,
+    console: Console | None = None,
+) -> Any:
+    """Run an agent and print formatted execution updates."""
+    active_console = console or Console()
+    payload = {"messages": [{"role": "user", "content": message}]}
+    print_execution_frame(
+        active_console,
+        ExecutionFrame(
+            agent=agent_name,
+            task=message,
+            doing="starting",
+            details="Agent run has started.",
+            next_step="wait for the first agent step",
+        ),
+    )
+
+    seen_keys: set[str] = set()
+    final_result: Any = None
+    if hasattr(agent, "stream"):
+        try:
+            stream = agent.stream(payload, stream_mode="updates")
+        except TypeError:
+            stream = agent.stream(payload)
+
+        for chunk in stream:
+            final_result = chunk
+            for event in execution_events_from_chunk(
+                chunk,
+                default_agent=agent_name,
+                task=message,
+            ):
+                if event.dedupe_key in seen_keys:
+                    continue
+                if event.dedupe_key:
+                    seen_keys.add(event.dedupe_key)
+                print_execution_frame(active_console, event.frame)
+    else:
+        final_result = agent.invoke(payload)
+        for event in execution_events_from_chunk(
+            final_result,
+            default_agent=agent_name,
+            task=message,
+        ):
+            print_execution_frame(active_console, event.frame)
+
+    print_execution_frame(
+        active_console,
+        ExecutionFrame(
+            agent=agent_name,
+            task=message,
+            doing="completed",
+            details="Agent run finished.",
+            next_step="review the output above",
+        ),
+    )
+    return final_result
+
+
 def main() -> int:
     """Run the selected agent and print the response."""
     args = parse_args()
@@ -123,8 +193,7 @@ def main() -> int:
     message = args.message or input("Message: ").strip()
 
     agent = build_agent(args.agent, model, args.industry, args.extra_need)
-    result = agent.invoke({"messages": [{"role": "user", "content": message}]})
-    print(result)
+    run_agent(agent, args.agent, message)
     return 0
 
 
