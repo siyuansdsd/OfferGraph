@@ -40,9 +40,10 @@ def parse_args() -> argparse.Namespace:
         help="Brief for the LinkedIn post.",
     )
     parser.add_argument(
-        "--additional-info",
-        default=None,
-        help="Optional context, audience, facts, or tone instructions.",
+        "--post-text",
+        dest="post_text",
+        required=True,
+        help="Exact final LinkedIn post text to insert into the composer.",
     )
     parser.add_argument(
         "--publish",
@@ -70,7 +71,7 @@ def main() -> int:
     result = linkedin_editor.invoke(
         {
             "task": args.task,
-            "additional_info": args.additional_info,
+            "post_text": args.post_text,
             "draft_only": not args.publish,
             "publish": args.publish,
             "execution_mode": args.mode,

@@ -9,6 +9,7 @@ from tools.linkedin.content_editor import (
     COMPOSER_BUTTON_SELECTORS,
     COMPOSER_EDITOR_SELECTORS,
     DEFAULT_LINKEDIN_SESSION_STATE_PATH,
+    LinkedInDraftValidationError,
     POST_BUTTON_SELECTORS,
     LinkedInEditorBrowserError,
     LinkedInEditorInput,
@@ -107,7 +108,10 @@ class LinkedInContentEditorToolTest(TestCase):
         self.assertEqual(linkedin_editor.name, "linkedin-editor")
 
     def test_input_schema_uses_safe_defaults(self) -> None:
-        tool_input = LinkedInEditorInput(task="Draft a launch post.")
+        tool_input = LinkedInEditorInput(
+            task="Draft a launch post.",
+            post_text="Final post text.",
+        )
 
         self.assertTrue(tool_input.draft_only)
         self.assertFalse(tool_input.publish)
@@ -120,7 +124,12 @@ class LinkedInContentEditorToolTest(TestCase):
 
     def test_default_invocation_requests_approval_when_auth_is_missing(self) -> None:
         with patch("tools.linkedin.content_editor.Path.exists", return_value=False):
-            result = linkedin_editor.invoke({"task": "Draft an OfferGraph launch post."})
+            result = linkedin_editor.invoke(
+                {
+                    "task": "Draft an OfferGraph launch post.",
+                    "post_text": "Final post text",
+                }
+            )
 
         self.assertEqual(result["status"], "needs_approval")
         self.assertEqual(result["url"], "https://www.linkedin.com/feed/")
@@ -132,6 +141,7 @@ class LinkedInContentEditorToolTest(TestCase):
             result = linkedin_editor.invoke(
                 {
                     "task": "Draft an OfferGraph launch post.",
+                    "post_text": "Final post text",
                     "execution_mode": "auto-mode",
                 }
             )
@@ -142,9 +152,25 @@ class LinkedInContentEditorToolTest(TestCase):
         self.assertIn("auth state is missing", result["message"])
         self.assertIn("scripts/setup_linkedin_auth.py", result["approval"]["manual_steps"][1])
 
-    def test_compose_post_prefers_additional_info_as_exact_draft(self) -> None:
-        self.assertEqual(compose_post("Brief", "Final post text"), "Final post text")
-        self.assertEqual(compose_post("Brief", None), "Brief")
+    def test_compose_post_prefers_post_text_as_exact_draft(self) -> None:
+        self.assertEqual(compose_post("Final post text", task="Brief"), "Final post text")
+
+    def test_compose_post_requires_final_post_text(self) -> None:
+        with self.assertRaisesRegex(LinkedInDraftValidationError, "post_text"):
+            compose_post("")
+
+    def test_compose_post_rejects_task_brief(self) -> None:
+        with self.assertRaisesRegex(LinkedInDraftValidationError, "task brief"):
+            compose_post(
+                "Create a LinkedIn post about MiniMax",
+                task="Create a LinkedIn post about MiniMax",
+            )
+
+        with self.assertRaisesRegex(LinkedInDraftValidationError, "task brief"):
+            compose_post(
+                "Prepare a LinkedIn post draft about MiniMax AI revenue.",
+                task="MiniMax post",
+            )
 
     def test_invocation_opens_browser_and_returns_draft_ready_when_auth_exists(self) -> None:
         with patch("tools.linkedin.content_editor.Path.exists", return_value=True), patch(
@@ -154,7 +180,7 @@ class LinkedInContentEditorToolTest(TestCase):
             result = linkedin_editor.invoke(
                 {
                     "task": "Draft an OfferGraph launch post.",
-                    "additional_info": "Final post text",
+                    "post_text": "Final post text",
                 }
             )
 
@@ -169,10 +195,26 @@ class LinkedInContentEditorToolTest(TestCase):
             publish=False,
         )
 
+    def test_invocation_rejects_missing_final_post_text_before_opening_browser(self) -> None:
+        with patch("tools.linkedin.content_editor.Path.exists", return_value=True), patch(
+            "tools.linkedin.content_editor.open_linkedin_composer",
+        ) as open_mock:
+            result = linkedin_editor.invoke(
+                {
+                    "task": "Prepare a LinkedIn post draft about MiniMax AI.",
+                    "post_text": "",
+                }
+            )
+
+        self.assertEqual(result["status"], "error")
+        self.assertIn("final LinkedIn post text", result["message"])
+        open_mock.assert_not_called()
+
     def test_publish_conflicts_with_draft_only(self) -> None:
         result = linkedin_editor.invoke(
             {
                 "task": "Publish an OfferGraph launch post.",
+                "post_text": "Final post text",
                 "draft_only": True,
                 "publish": True,
             }
@@ -193,7 +235,7 @@ class LinkedInContentEditorToolTest(TestCase):
             result = linkedin_editor.invoke(
                 {
                     "task": "Publish an OfferGraph launch post.",
-                    "additional_info": "Final post text",
+                    "post_text": "Final post text",
                     "draft_only": False,
                     "publish": True,
                 }
@@ -221,7 +263,7 @@ class LinkedInContentEditorToolTest(TestCase):
             result = linkedin_editor.invoke(
                 {
                     "task": "Publish an OfferGraph launch post.",
-                    "additional_info": "Final post text",
+                    "post_text": "Final post text",
                     "draft_only": False,
                     "publish": True,
                 }
@@ -235,6 +277,7 @@ class LinkedInContentEditorToolTest(TestCase):
             result = linkedin_editor.invoke(
                 {
                     "task": "Draft an OfferGraph launch post.",
+                    "post_text": "Final post text",
                     "execution_mode": "bad-mode",
                 }
             )
@@ -250,7 +293,7 @@ class LinkedInContentEditorToolTest(TestCase):
             result = linkedin_editor.invoke(
                 {
                     "task": "Draft an OfferGraph launch post.",
-                    "additional_info": "Final post text",
+                    "post_text": "Final post text",
                 }
             )
 

@@ -45,9 +45,12 @@ class LinkedInEditorInput(BaseModel):
         ...,
         description="The goal or brief for the LinkedIn post.",
     )
-    additional_info: str | None = Field(
-        default=None,
-        description="Extra context, facts, links, audience, tone, or constraints.",
+    post_text: str = Field(
+        ...,
+        description=(
+            "The exact final LinkedIn post text to insert into the composer. "
+            "Do not pass a task brief, outline, facts list, or instructions here."
+        ),
     )
     draft_only: bool = Field(
         default=True,
@@ -96,6 +99,10 @@ class LinkedInEditorResult(BaseModel):
 
 class LinkedInEditorBrowserError(RuntimeError):
     """Raised when LinkedIn browser automation cannot prepare a draft."""
+
+
+class LinkedInDraftValidationError(ValueError):
+    """Raised when linkedin-editor receives a brief instead of final post text."""
 
 
 def open_linkedin_composer(
@@ -193,11 +200,37 @@ def open_linkedin_composer(
             browser.close()
 
 
-def compose_post(task: str, additional_info: str | None = None) -> str:
+def compose_post(post_text: str, *, task: str | None = None) -> str:
     """Return the exact draft text that should be inserted into LinkedIn."""
-    if additional_info and additional_info.strip():
-        return additional_info.strip()
-    return task.strip()
+    draft = post_text.strip()
+    if not draft:
+        raise LinkedInDraftValidationError(
+            "linkedin-editor needs the final LinkedIn post text in post_text. "
+            "Do not call it with only a task brief; draft the post first, then pass "
+            "the exact post body through post_text."
+        )
+
+    if (task and draft == task.strip()) or _looks_like_task_brief(draft):
+        raise LinkedInDraftValidationError(
+            "linkedin-editor received a task brief instead of final post text. "
+            "Pass only the exact LinkedIn post body in post_text."
+        )
+
+    return draft
+
+
+def _looks_like_task_brief(text: str) -> bool:
+    normalized = " ".join(text.lower().split())
+    brief_prefixes = (
+        "create a linkedin post",
+        "create and post",
+        "draft a linkedin post",
+        "prepare a linkedin post",
+        "write a linkedin post",
+        "help me create",
+        "help me open linkedin",
+    )
+    return any(normalized.startswith(prefix) for prefix in brief_prefixes)
 
 
 def publish_or_save_draft(
@@ -336,7 +369,7 @@ def check_linkedin_auth_approval(
 @tool("linkedin-editor", args_schema=LinkedInEditorInput)
 def linkedin_editor(
     task: str,
-    additional_info: str | None = None,
+    post_text: str,
     draft_only: bool = True,
     publish: bool = False,
     session_state_path: str = DEFAULT_LINKEDIN_SESSION_STATE_PATH,
@@ -360,7 +393,15 @@ def linkedin_editor(
     if auth_approval_response is not None:
         return auth_approval_response
 
-    draft = compose_post(task, additional_info)
+    try:
+        draft = compose_post(post_text, task=task)
+    except LinkedInDraftValidationError as exc:
+        return LinkedInEditorResult(
+            status="error",
+            message=str(exc),
+            url=LINKEDIN_FEED_URL,
+        ).model_dump(exclude_none=True)
+
     try:
         browser_result = open_linkedin_composer(
             session_state_path,

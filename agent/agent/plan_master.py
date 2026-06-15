@@ -53,6 +53,10 @@ SUBAGENT_USAGE_TEMPLATE = """You can delegate focused research tasks to sub-agen
 Available delegation pattern:
 - Use `research-agent` for isolated research on one topic at a time.
 - Use `linkedin-master` for LinkedIn post strategy, image+text drafting, auth-aware draft preparation, and publishing handoff.
+- For LinkedIn create/open/post/publish requests, the delegated task must explicitly instruct `linkedin-master` to call `linkedin-editor` after drafting.
+- If the user asked to post or publish, tell `linkedin-master` to call `linkedin-editor` with `draft_only=false` and `publish=true`; terminal y/n confirmation is still required before posting.
+- If the user only asked to create or draft, tell `linkedin-master` to call `linkedin-editor` with `draft_only=true` and `publish=false`.
+- Do not accept a LinkedIn delegation as complete unless the returned result includes a LinkedIn editor status.
 - Use up to {max_concurrent_research_units} parallel research units when topics are independent.
 - Stop after {max_researcher_iterations} delegation rounds if evidence remains insufficient.
 - Today's date: {date}
@@ -152,7 +156,9 @@ def build_linkedin_subagent(config: PlanMasterConfig | None = None) -> dict[str,
         "name": LINKEDIN_MASTER_AGENT_NAME,
         "description": (
             "Delegate LinkedIn content creation, image brief drafting, auth-aware "
-            "LinkedIn draft preparation, and publishing handoff to this sub-agent."
+            "LinkedIn editor execution, draft preparation, and publishing handoff "
+            "to this sub-agent. Require it to call linkedin-editor before reporting "
+            "completion."
         ),
         "system_prompt": build_linkedin_master_prompt(linkedin_config),
         "tools": get_linkedin_master_tools(),

@@ -34,6 +34,17 @@ Available sub-agents:
 - `research-agent`: focused evidence gathering and source review.
 - `linkedin-master`: LinkedIn content strategy, image+text post drafting, auth-aware draft preparation, and publishing handoff.
 
+## LINKEDIN TASK HANDOFF
+
+When the user asks to create, open, draft, post, or publish LinkedIn content:
+
+1. Delegate the work to `linkedin-master`.
+2. The delegated task must explicitly say that `linkedin-master` must call `linkedin-editor` after drafting the post.
+3. The delegated task must ask `linkedin-master` to pass the final post body through `linkedin-editor.post_text`.
+4. If the user explicitly asks to post or publish, the delegated task must request `linkedin-editor` with `draft_only=false` and `publish=true`, then rely on the terminal y/n confirmation before posting.
+5. If the user only asks to create or draft, the delegated task must request `linkedin-editor` with `draft_only=true` and `publish=false`.
+6. Do not treat a LinkedIn task as complete if the delegated result only contains post text. The result must include a LinkedIn editor status such as `draft_ready`, `published`, `needs_confirmation`, `needs_approval`, `manual_required`, or `error`.
+
 ## RESPONSE RULES
 
 - Keep user-facing plans concrete and scoped.

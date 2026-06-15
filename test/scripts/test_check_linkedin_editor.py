@@ -9,13 +9,24 @@ from scripts.check_linkedin_editor import main, parse_args
 
 class CheckLinkedInEditorScriptTest(TestCase):
     def test_parse_args_accepts_publish_alias(self) -> None:
-        with patch("sys.argv", ["check_linkedin_editor.py", "--publish"]):
+        with patch(
+            "sys.argv",
+            ["check_linkedin_editor.py", "--post-text", "Final post text", "--publish"],
+        ):
             args = parse_args()
 
         self.assertTrue(args.publish)
 
     def test_parse_args_accepts_legacy_publish_path_alias(self) -> None:
-        with patch("sys.argv", ["check_linkedin_editor.py", "--publish-path"]):
+        with patch(
+            "sys.argv",
+            [
+                "check_linkedin_editor.py",
+                "--post-text",
+                "Final post text",
+                "--publish-path",
+            ],
+        ):
             args = parse_args()
 
         self.assertTrue(args.publish)
@@ -27,7 +38,7 @@ class CheckLinkedInEditorScriptTest(TestCase):
                 "check_linkedin_editor.py",
                 "--task",
                 "Post this draft",
-                "--additional-info",
+                "--post-text",
                 "Final post text",
                 "--publish",
             ],
@@ -43,7 +54,7 @@ class CheckLinkedInEditorScriptTest(TestCase):
         editor_mock.invoke.assert_called_once_with(
             {
                 "task": "Post this draft",
-                "additional_info": "Final post text",
+                "post_text": "Final post text",
                 "draft_only": False,
                 "publish": True,
                 "execution_mode": None,

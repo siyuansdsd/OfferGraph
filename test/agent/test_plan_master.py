@@ -41,6 +41,9 @@ class PlanMasterTest(TestCase):
         self.assertIn("2 parallel research units", prompt)
         self.assertIn("4 delegation rounds", prompt)
         self.assertIn("Wed Jun 10, 2026", prompt)
+        self.assertIn("call `linkedin-editor`", prompt)
+        self.assertIn("draft_only=false", prompt)
+        self.assertIn("publish=true", prompt)
 
     def test_build_plan_master_prompt_contains_notebook_patterns(self) -> None:
         prompt = build_plan_master_prompt(
@@ -56,6 +59,11 @@ class PlanMasterTest(TestCase):
         self.assertIn("SUB-AGENT DELEGATION", prompt)
         self.assertIn("plan-master", prompt)
         self.assertIn("linkedin-master", prompt)
+        self.assertIn("LINKEDIN TASK HANDOFF", prompt)
+        self.assertIn("linkedin-editor.post_text", prompt)
+        self.assertIn("draft_only=false", prompt)
+        self.assertIn("publish=true", prompt)
+        self.assertIn("draft_ready", prompt)
         self.assertIn("AI infrastructure", prompt)
         self.assertIn("include a hiring-market angle", prompt)
 
@@ -84,6 +92,7 @@ class PlanMasterTest(TestCase):
 
         self.assertEqual(subagent["name"], "linkedin-master")
         self.assertIn("LinkedIn content creation", subagent["description"])
+        self.assertIn("linkedin-editor", subagent["description"])
         self.assertIn("fintech", subagent["system_prompt"])
         self.assertIn("focus on risk analysis", subagent["system_prompt"])
         self.assertIn("linkedin-editor", [tool.name for tool in subagent["tools"]])

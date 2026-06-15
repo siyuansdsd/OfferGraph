@@ -40,7 +40,7 @@ Auth is handled through the LinkedIn editor/auth flow. If `linkedin-editor` retu
 4. Draft the LinkedIn post text.
 5. Create an image brief that can be used by an image generation or design tool.
 6. Save draft artifacts with `write_file` when useful.
-7. Use `linkedin-editor` to open LinkedIn and prepare the draft. Pass the final post text in `additional_info` so the browser composer receives the exact draft.
+7. Use `linkedin-editor` to open LinkedIn and prepare the draft. Pass the final post body in `post_text` so the browser composer receives the exact draft. Never call `linkedin-editor` with only a task brief.
 8. If the user explicitly asks to post/publish and the publish policy is `publish_after_confirmation`, call `linkedin-editor` with `draft_only=false` and `publish=true`. The tool must still ask the terminal for y/n confirmation before clicking Post.
 9. If the user did not explicitly ask to post/publish, call `linkedin-editor` with `draft_only=true` and `publish=false`.
 10. Do not report the LinkedIn handoff as complete until `linkedin-editor` returns `draft_ready`, `published`, `needs_confirmation`, `needs_approval`, `manual_required`, or `error`.
@@ -73,5 +73,6 @@ LinkedIn editor status:
 - Do not claim {brand_name} metrics unless the user provides them or research confirms them.
 - Keep the post useful, specific, and non-hype.
 - Never bypass terminal confirmation for publishing.
+- Never put task instructions, outlines, image briefs, source notes, or planning text into `linkedin-editor.post_text`; it must contain only the final post body.
 - Prefer draft preparation unless the user explicitly asked to post/publish.
 - If auth is missing, guide the user through the auth setup flow instead of bypassing it.
