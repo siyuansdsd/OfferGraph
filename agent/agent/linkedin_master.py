@@ -16,6 +16,7 @@ from agent.model_selection import resolve_model_reference
 from agent.prompt import render_prompt
 from config.env import get_env
 from tools.file_tools import ls, read_file, write_file
+from tools.image_tools import linkedin_image_search, openai_image_generator
 from tools.linkedin.content_editor import linkedin_editor
 from tools.research_tools import get_today_str, tavily_search, think_tool
 from tools.state import PlanMasterState
@@ -76,6 +77,8 @@ def get_linkedin_master_tools() -> list[BaseTool]:
         ls,
         read_file,
         write_file,
+        linkedin_image_search,
+        openai_image_generator,
         linkedin_editor,
     ]
 
