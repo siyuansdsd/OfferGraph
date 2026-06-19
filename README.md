@@ -4,7 +4,45 @@
   <img src="./assets/logo.png" alt="OfferGraph logo" width="720">
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11+-blue" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/LangGraph-Agent-green" alt="LangGraph Agent">
+  <img src="https://img.shields.io/badge/MCP-CV%20Tailoring-purple" alt="MCP CV Tailoring">
+  <a href="https://github.com/jhcook/cv">
+    <img src="https://img.shields.io/badge/Inspired%20by-jhcook%2Fcv-orange" alt="Inspired by jhcook/cv">
+  </a>
+</p>
+
 An Offer hunter ai agent team based on LangGraph, allowed monitor and future customize, and have manus agent error memory feat, to give users a free, efficient, cheap way to get easy offer.
+
+## What OfferGraph Does
+
+OfferGraph is an agent workspace for the offer-hunting loop: planning, research,
+LinkedIn content, CV tailoring, and browser-assisted workflows with explicit
+approval gates.
+
+| Area | Capability |
+| --- | --- |
+| Plan Master | Coordinates research, sub-agents, TODOs, and workflow handoffs |
+| LinkedIn Master | Creates LinkedIn post drafts and routes browser publishing through approval gates |
+| CV Tailoring MCP | Runs CV tailoring as a separate MCP service that agents can call |
+| Browser Tools | Uses Playwright for authenticated LinkedIn flows |
+| Safety Controls | Keeps login, publishing, and future application submission user-controlled |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User --> AgentConsole[Agent Console]
+  AgentConsole --> PlanMaster[plan-master]
+  PlanMaster --> ResearchAgent[research-agent]
+  PlanMaster --> LinkedInMaster[linkedin-master]
+  PlanMaster --> CVMCP[CV Tailoring MCP]
+  LinkedInMaster --> LinkedInEditor[linkedin-editor]
+  LinkedInEditor --> Playwright[Playwright Browser]
+  CVMCP --> CVMaker[external/cv_maker]
+  CVMaker --> LocalData[local_data/cv_maker/user_content]
+```
 
 ## Setup
 
@@ -121,3 +159,27 @@ Provided tools:
 - `cv_tailoring_health`: checks the vendored CV Maker project and Python runtime.
 - `cv_tailoring_list_models`: delegates to `run.py --list-models`.
 - `cv_tailor_resume`: generates a tailored CV and cover letter from JD text, JD path, or JD URL.
+
+## Project Layout
+
+```text
+agent/                 Agent builders, prompts, model selection, MCP clients
+tools/                 LangChain tools and browser/auth helpers
+mcp_servers/           Local MCP services exposed to agents
+external/cv_maker/     Vendored CV Maker source, inspired by jhcook/cv
+local_data/            Ignored personal CV data and generated files
+scripts/               Local setup and console entrypoints
+test/                  Unit tests for agents, tools, scripts, and MCP services
+```
+
+## Safety Notes
+
+- `.env`, `.auth/`, and `local_data/` are ignored by git.
+- LinkedIn publishing requires terminal confirmation before clicking Post.
+- CV personal data stays in `local_data/cv_maker/user_content`.
+- The agent process uses CV Maker through MCP; it does not import CV Maker internals directly.
+
+## Attribution
+
+The CV tailoring service is based on and adapted from
+[jhcook/cv](https://github.com/jhcook/cv).
