@@ -17,6 +17,7 @@ from tools.linkedin.content_editor import (
     confirm_linkedin_publish,
     linkedin_editor,
     open_linkedin_composer,
+    record_linkedin_editor_memory,
 )
 from tools.linkedin.auth import LINKEDIN_FEED_URL
 
@@ -176,7 +177,9 @@ class LinkedInContentEditorToolTest(TestCase):
         with patch("tools.linkedin.content_editor.Path.exists", return_value=True), patch(
             "tools.linkedin.content_editor.open_linkedin_composer",
             return_value={"url": LINKEDIN_FEED_URL},
-        ) as open_mock:
+        ) as open_mock, patch(
+            "tools.linkedin.content_editor.record_linkedin_editor_memory",
+        ) as memory_mock:
             result = linkedin_editor.invoke(
                 {
                     "task": "Draft an OfferGraph launch post.",
@@ -194,6 +197,9 @@ class LinkedInContentEditorToolTest(TestCase):
             draft="Final post text",
             publish=False,
         )
+        memory_mock.assert_called_once()
+        self.assertEqual(memory_mock.call_args.kwargs["status"], "draft_ready")
+        self.assertTrue(memory_mock.call_args.kwargs["success"])
 
     def test_invocation_rejects_missing_final_post_text_before_opening_browser(self) -> None:
         with patch("tools.linkedin.content_editor.Path.exists", return_value=True), patch(
@@ -231,7 +237,9 @@ class LinkedInContentEditorToolTest(TestCase):
                 "published": False,
                 "publish_confirmed": False,
             },
-        ) as open_mock:
+        ) as open_mock, patch(
+            "tools.linkedin.content_editor.record_linkedin_editor_memory",
+        ) as memory_mock:
             result = linkedin_editor.invoke(
                 {
                     "task": "Publish an OfferGraph launch post.",
@@ -250,6 +258,8 @@ class LinkedInContentEditorToolTest(TestCase):
             draft="Final post text",
             publish=True,
         )
+        memory_mock.assert_called_once()
+        self.assertEqual(memory_mock.call_args.kwargs["status"], "needs_confirmation")
 
     def test_publish_path_returns_published_after_terminal_confirmation(self) -> None:
         with patch("tools.linkedin.content_editor.Path.exists", return_value=True), patch(
@@ -259,7 +269,9 @@ class LinkedInContentEditorToolTest(TestCase):
                 "published": True,
                 "publish_confirmed": True,
             },
-        ):
+        ), patch(
+            "tools.linkedin.content_editor.record_linkedin_editor_memory",
+        ) as memory_mock:
             result = linkedin_editor.invoke(
                 {
                     "task": "Publish an OfferGraph launch post.",
@@ -271,6 +283,8 @@ class LinkedInContentEditorToolTest(TestCase):
 
         self.assertEqual(result["status"], "published")
         self.assertIn("posted after y/n confirmation", result["message"])
+        memory_mock.assert_called_once()
+        self.assertEqual(memory_mock.call_args.kwargs["status"], "published")
 
     def test_invalid_execution_mode_returns_error(self) -> None:
         with patch("tools.linkedin.content_editor.Path.exists", return_value=False):
@@ -289,7 +303,9 @@ class LinkedInContentEditorToolTest(TestCase):
         with patch("tools.linkedin.content_editor.Path.exists", return_value=True), patch(
             "tools.linkedin.content_editor.open_linkedin_composer",
             side_effect=LinkedInEditorBrowserError("Browser failed"),
-        ):
+        ), patch(
+            "tools.linkedin.content_editor.record_linkedin_editor_memory",
+        ) as memory_mock:
             result = linkedin_editor.invoke(
                 {
                     "task": "Draft an OfferGraph launch post.",
@@ -300,6 +316,37 @@ class LinkedInContentEditorToolTest(TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("Browser failed", result["message"])
         self.assertEqual(result["draft"], "Final post text")
+        memory_mock.assert_called_once()
+        self.assertFalse(memory_mock.call_args.kwargs["success"])
+        self.assertEqual(memory_mock.call_args.kwargs["error"], "Browser failed")
+
+    def test_record_linkedin_editor_memory_sanitizes_browser_trace(self) -> None:
+        with patch("tools.linkedin.content_editor.record_browser_trace_safely") as record_mock:
+            record_linkedin_editor_memory(
+                task="Draft post",
+                draft="Final post text " * 80,
+                browser_result={
+                    "url": LINKEDIN_FEED_URL,
+                    "composer_selector": COMPOSER_BUTTON_SELECTORS[0],
+                    "editor_selector": COMPOSER_EDITOR_SELECTORS[0],
+                    "draft_inserted": True,
+                    "publish_requested": False,
+                    "publish_confirmed": False,
+                    "published": False,
+                },
+                status="draft_ready",
+                message="Draft ready",
+                publish=False,
+                success=True,
+            )
+
+        record_mock.assert_called_once()
+        kwargs = record_mock.call_args.kwargs
+        self.assertEqual(kwargs["module"], "linkedin")
+        self.assertEqual(kwargs["url"], LINKEDIN_FEED_URL)
+        self.assertIn("linkedin-editor", kwargs["tags"])
+        self.assertNotIn("session_state_path", kwargs["extracted_data"])
+        self.assertLessEqual(len(kwargs["extracted_data"]["draft_preview"]), 500)
 
     def test_open_linkedin_composer_loads_auth_state_and_fills_draft(self) -> None:
         with TemporaryDirectory() as tmp_dir:

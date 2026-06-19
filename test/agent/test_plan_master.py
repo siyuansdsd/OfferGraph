@@ -57,6 +57,7 @@ class PlanMasterTest(TestCase):
         self.assertIn("TODO MANAGEMENT", prompt)
         self.assertIn("FILE SYSTEM USAGE", prompt)
         self.assertIn("SUB-AGENT DELEGATION", prompt)
+        self.assertIn("MEMORY USAGE", prompt)
         self.assertIn("plan-master", prompt)
         self.assertIn("linkedin-master", prompt)
         self.assertIn("LINKEDIN TASK HANDOFF", prompt)
@@ -78,7 +79,10 @@ class PlanMasterTest(TestCase):
 
         self.assertEqual(subagent["name"], RESEARCH_AGENT_NAME)
         self.assertIn("one topic at a time", subagent["description"])
-        self.assertEqual([tool.name for tool in subagent["tools"]], ["tavily_search", "think_tool"])
+        self.assertEqual(
+            [tool.name for tool in subagent["tools"]],
+            ["memory-search", "tavily_search", "think_tool"],
+        )
         self.assertIn("Wed Jun 10, 2026", subagent["system_prompt"])
 
     def test_build_linkedin_subagent(self) -> None:
@@ -108,7 +112,7 @@ class PlanMasterTest(TestCase):
     def test_tool_sets(self) -> None:
         self.assertEqual(
             [tool.name for tool in get_research_tools()],
-            ["tavily_search", "think_tool"],
+            ["memory-search", "tavily_search", "think_tool"],
         )
         self.assertEqual(
             [tool.name for tool in get_plan_master_tools()],
@@ -118,6 +122,7 @@ class PlanMasterTest(TestCase):
                 "write_file",
                 "write_todos",
                 "read_todos",
+                "memory-search",
                 "tavily_search",
                 "think_tool",
             ],
@@ -139,7 +144,10 @@ class PlanMasterTest(TestCase):
         _, kwargs = create_mock.call_args
         self.assertEqual(kwargs["model"], "test:model")
         self.assertEqual(kwargs["name"], PLAN_MASTER_AGENT_NAME)
-        self.assertEqual([tool.name for tool in kwargs["tools"]], ["tavily_search", "think_tool"])
+        self.assertEqual(
+            [tool.name for tool in kwargs["tools"]],
+            ["memory-search", "tavily_search", "think_tool"],
+        )
         self.assertEqual(
             [subagent["name"] for subagent in kwargs["subagents"]],
             [RESEARCH_AGENT_NAME, "linkedin-master"],
@@ -162,7 +170,7 @@ class PlanMasterTest(TestCase):
         _, kwargs = create_mock.call_args
         self.assertEqual(
             [tool.name for tool in kwargs["tools"]],
-            ["tavily_search", "think_tool", "cv_tailor_resume"],
+            ["memory-search", "tavily_search", "think_tool", "cv_tailor_resume"],
         )
 
     def test_create_plan_master_agent_can_use_langchain_agent(self) -> None:

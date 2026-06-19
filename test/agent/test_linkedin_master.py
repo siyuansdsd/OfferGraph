@@ -44,6 +44,7 @@ class LinkedInMasterTest(TestCase):
         self.assertIn("draft_only", prompt)
         self.assertIn("Structured Output", prompt)
         self.assertIn("linkedin-editor", prompt)
+        self.assertIn("memory-search", prompt)
         self.assertIn("github-project-inspector", prompt)
         self.assertIn("GitHub project evidence", prompt)
         self.assertIn("linkedin-image-search", prompt)
@@ -62,6 +63,7 @@ class LinkedInMasterTest(TestCase):
         self.assertEqual(
             [tool.name for tool in get_linkedin_master_tools()],
             [
+                "memory-search",
                 "tavily_search",
                 "think_tool",
                 "ls",
