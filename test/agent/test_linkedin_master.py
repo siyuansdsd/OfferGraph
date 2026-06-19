@@ -44,6 +44,8 @@ class LinkedInMasterTest(TestCase):
         self.assertIn("draft_only", prompt)
         self.assertIn("Structured Output", prompt)
         self.assertIn("linkedin-editor", prompt)
+        self.assertIn("github-project-inspector", prompt)
+        self.assertIn("GitHub project evidence", prompt)
         self.assertIn("linkedin-image-search", prompt)
         self.assertIn("openai-image-generator", prompt)
 
@@ -65,6 +67,7 @@ class LinkedInMasterTest(TestCase):
                 "ls",
                 "read_file",
                 "write_file",
+                "github-project-inspector",
                 "linkedin-image-search",
                 "openai-image-generator",
                 "linkedin-editor",
