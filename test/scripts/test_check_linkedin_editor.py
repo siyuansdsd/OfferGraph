@@ -40,6 +40,10 @@ class CheckLinkedInEditorScriptTest(TestCase):
                 "Post this draft",
                 "--post-text",
                 "Final post text",
+                "--image-path",
+                "/tmp/image.png",
+                "--alt-text",
+                "Alt text",
                 "--publish",
             ],
         ), patch("scripts.check_linkedin_editor.linkedin_editor") as editor_mock, patch(
@@ -57,6 +61,12 @@ class CheckLinkedInEditorScriptTest(TestCase):
                 "post_text": "Final post text",
                 "draft_only": False,
                 "publish": True,
+                "image_path": "/tmp/image.png",
+                "image_url": None,
+                "alt_text": "Alt text",
+                "auto_image": True,
+                "require_image": True,
+                "show_cursor": True,
                 "execution_mode": None,
             }
         )
