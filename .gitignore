@@ -5,3 +5,5 @@ __pycache__/
 .env
 .auth/
 generated_assets/
+local_data/
+external/cv_maker/user_content

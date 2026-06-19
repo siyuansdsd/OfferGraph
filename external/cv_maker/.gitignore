@@ -1,0 +1,37 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# User Content
+user_content/
+library/
+library_cache/
+generated_cvs/
+
+# System
+.agent/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Agent
+.agent/
+
+# System Files
+.DS_Store
+.model_cache.json

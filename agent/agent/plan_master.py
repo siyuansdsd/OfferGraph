@@ -190,7 +190,7 @@ def create_plan_master_agent(
     if use_deepagents:
         return create_deep_agent(
             model=active_model,
-            tools=get_research_tools(),
+            tools=[*get_research_tools(), *(extra_tools or [])],
             system_prompt=system_prompt,
             subagents=build_plan_master_subagents(active_config),
             name=PLAN_MASTER_AGENT_NAME,

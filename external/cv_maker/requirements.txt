@@ -1,0 +1,12 @@
+google-genai
+python-docx
+beautifulsoup4
+requests
+gdown
+pypdf
+onedrivedownloader
+openai
+google-cloud-aiplatform
+playwright
+google-cloud-storage
+rich

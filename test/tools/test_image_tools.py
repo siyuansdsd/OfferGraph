@@ -166,14 +166,22 @@ class ImageToolsTest(TestCase):
         )
 
     def test_generate_openai_image_reports_missing_api_key(self) -> None:
+        def fake_get_env(name, default=None, load=True):
+            if name == OPENAI_API_KEY_ENV:
+                return None
+            return default
+
         with patch.dict("os.environ", {}, clear=True), patch(
             "tools.image_tools.load_project_env",
             return_value=False,
-        ):
+        ), patch("tools.image_tools.get_env", side_effect=fake_get_env), patch(
+            "tools.image_tools.OpenAI",
+        ) as openai_cls:
             result = generate_openai_image("A clean LinkedIn chart")
 
         self.assertEqual(result.status, "error")
         self.assertIn(OPENAI_API_KEY_ENV, result.message)
+        openai_cls.assert_not_called()
 
     def test_openai_image_generator_tool_returns_dict(self) -> None:
         with patch(
