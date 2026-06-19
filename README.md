@@ -60,3 +60,64 @@ To initialize LinkedIn auth state manually:
 ./.venv/bin/python -m playwright install chromium
 ./.venv/bin/python scripts/setup_linkedin_auth.py
 ```
+
+## CV Tailoring MCP
+
+OfferGraph vendors the AI CV Maker source under:
+
+```bash
+external/cv_maker
+```
+
+Private CV inputs, templates, generated resumes, and logs live outside git under:
+
+```bash
+local_data/cv_maker/user_content
+```
+
+The MCP server keeps `external/cv_maker/user_content` linked to that ignored
+local data directory. You can override these paths in `.env`:
+
+```bash
+CV_MAKER_PROJECT_ROOT=external/cv_maker
+CV_MAKER_USER_CONTENT_DIR=local_data/cv_maker/user_content
+CV_TAILORING_MCP_URL=http://127.0.0.1:8765/mcp
+```
+
+Run the CV Maker MCP service in terminal 1:
+
+```bash
+./.venv/bin/python -m mcp_servers.cv_tailoring.server \
+  --transport streamable-http \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --path /mcp
+```
+
+Run the agent system in terminal 2 and load CV Maker through MCP:
+
+```bash
+./.venv/bin/python scripts/agent_console.py \
+  --agent plan-master \
+  --with-cv-tailoring-mcp
+```
+
+At runtime, the agent process is the MCP client and the CV Maker process is the
+MCP server. The agent uses only the MCP tools; it does not import CV Maker
+internals directly.
+
+For local development only, the agent can also spawn the MCP server as a stdio
+subprocess:
+
+```bash
+CV_TAILORING_MCP_CLIENT_TRANSPORT=stdio \
+./.venv/bin/python scripts/agent_console.py \
+  --agent plan-master \
+  --with-cv-tailoring-mcp
+```
+
+Provided tools:
+
+- `cv_tailoring_health`: checks the vendored CV Maker project and Python runtime.
+- `cv_tailoring_list_models`: delegates to `run.py --list-models`.
+- `cv_tailor_resume`: generates a tailored CV and cover letter from JD text, JD path, or JD URL.
