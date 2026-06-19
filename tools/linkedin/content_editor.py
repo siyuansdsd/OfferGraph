@@ -108,7 +108,7 @@ ALT_TEXT_SAVE_SELECTORS = (
 )
 DEFAULT_PLAYWRIGHT_TIMEOUT_MS = 15_000
 IMAGE_ATTACH_TIMEOUT_MS = 5_000
-CURSOR_MOVE_DURATION_MS = 350
+CURSOR_MOVE_DURATION_MS = 650
 _PREPARED_DRAFT_KEYS: set[str] = set()
 IMAGE_RELEVANCE_STOPWORDS = {
     "about",
@@ -774,26 +774,90 @@ def _enable_visual_cursor(page: Any) -> bool:
                       "background: rgba(255, 45, 85, 0.18)",
                       "border-radius: 999px",
                       "box-shadow: 0 0 0 5px rgba(255, 45, 85, 0.18)",
-                      "transform: translate(-50%, -50%)",
+                      "transform: translate3d(50vw, 50vh, 0) translate(-50%, -50%) scale(1)",
                       "z-index: 2147483647",
                       "pointer-events: none",
-                      "transition: left 180ms ease, top 180ms ease, transform 120ms ease, background 120ms ease"
+                      "transition: background 120ms ease, box-shadow 120ms ease",
+                      "will-change: transform"
                     ].join(";");
                     document.documentElement.appendChild(cursor);
                   }
-                  window.__offergraphMoveCursor = (x, y, active = false) => {
+
+                  window.__offergraphCursorState = window.__offergraphCursorState || {
+                    x: Math.round(window.innerWidth * 0.5),
+                    y: Math.round(window.innerHeight * 0.5),
+                    active: false,
+                    animation: null
+                  };
+
+                  const state = window.__offergraphCursorState;
+                  const renderCursor = () => {
                     const activeCursor = document.getElementById(id);
                     if (!activeCursor) return false;
-                    activeCursor.style.left = `${x}px`;
-                    activeCursor.style.top = `${y}px`;
-                    activeCursor.style.transform = active
-                      ? "translate(-50%, -50%) scale(0.72)"
-                      : "translate(-50%, -50%) scale(1)";
-                    activeCursor.style.background = active
+                    const scale = state.active ? 0.72 : 1;
+                    activeCursor.style.transform = [
+                      `translate3d(${state.x}px, ${state.y}px, 0)`,
+                      "translate(-50%, -50%)",
+                      `scale(${scale})`
+                    ].join(" ");
+                    activeCursor.style.background = state.active
                       ? "rgba(255, 45, 85, 0.42)"
                       : "rgba(255, 45, 85, 0.18)";
+                    activeCursor.style.boxShadow = state.active
+                      ? "0 0 0 9px rgba(255, 45, 85, 0.16)"
+                      : "0 0 0 5px rgba(255, 45, 85, 0.18)";
                     return true;
                   };
+
+                  const easeOutCubic = (value) => 1 - Math.pow(1 - value, 3);
+
+                  window.__offergraphAnimateCursorTo = ({ x, y, duration = 550, active = false }) => {
+                    if (state.animation) {
+                      window.cancelAnimationFrame(state.animation);
+                      state.animation = null;
+                    }
+                    const startX = state.x;
+                    const startY = state.y;
+                    const startedAt = window.performance.now();
+                    state.active = Boolean(active);
+                    renderCursor();
+
+                    return new Promise((resolve) => {
+                      const step = (now) => {
+                        const progress = duration <= 0
+                          ? 1
+                          : Math.min((now - startedAt) / duration, 1);
+                        const eased = easeOutCubic(progress);
+                        state.x = startX + (x - startX) * eased;
+                        state.y = startY + (y - startY) * eased;
+                        renderCursor();
+                        if (progress < 1) {
+                          state.animation = window.requestAnimationFrame(step);
+                          return;
+                        }
+                        state.x = x;
+                        state.y = y;
+                        state.animation = null;
+                        renderCursor();
+                        resolve(true);
+                      };
+                      state.animation = window.requestAnimationFrame(step);
+                    });
+                  };
+
+                  window.__offergraphMoveCursor = (x, y, active = false) => {
+                    state.x = x;
+                    state.y = y;
+                    state.active = Boolean(active);
+                    return renderCursor();
+                  };
+
+                  window.__offergraphSetCursorActive = (active = false) => {
+                    state.active = Boolean(active);
+                    return renderCursor();
+                  };
+
+                  renderCursor();
                   return true;
                 }
                 """
@@ -814,48 +878,80 @@ def _move_cursor_to_locator(page: Any, locator: Any) -> bool:
 
     x = bounding_box["x"] + bounding_box["width"] / 2
     y = bounding_box["y"] + bounding_box["height"] / 2
+    _animate_visual_cursor_to(page, x, y, duration_ms=CURSOR_MOVE_DURATION_MS)
     try:
-        page.mouse.move(x, y, steps=8)
+        page.mouse.move(x, y, steps=16)
     except Exception:
         try:
             page.mouse.move(x, y)
         except Exception:
             pass
-    _set_visual_cursor_position(page, x, y)
     return True
 
 
-def _set_visual_cursor_position(page: Any, x: float, y: float, *, active: bool = False) -> None:
+def _animate_visual_cursor_to(
+    page: Any,
+    x: float,
+    y: float,
+    *,
+    duration_ms: int = CURSOR_MOVE_DURATION_MS,
+    active: bool = False,
+) -> bool:
+    try:
+        return bool(
+            page.evaluate(
+                """
+                async ({ x, y, duration, active }) => {
+                  if (window.__offergraphAnimateCursorTo) {
+                    return await window.__offergraphAnimateCursorTo({
+                      x,
+                      y,
+                      duration,
+                      active
+                    });
+                  }
+                  if (window.__offergraphMoveCursor) {
+                    return window.__offergraphMoveCursor(x, y, active);
+                  }
+                  return false;
+                }
+                """,
+                {
+                    "x": x,
+                    "y": y,
+                    "duration": duration_ms,
+                    "active": active,
+                },
+            )
+        )
+    except Exception:
+        return False
+
+
+def _set_visual_cursor_active(page: Any, active: bool) -> None:
     try:
         page.evaluate(
             """
-            ({ x, y, active }) => {
-              if (window.__offergraphMoveCursor) {
-                window.__offergraphMoveCursor(x, y, active);
+            (active) => {
+              if (window.__offergraphSetCursorActive) {
+                return window.__offergraphSetCursorActive(active);
               }
+              return false;
             }
             """,
-            {"x": x, "y": y, "active": active},
+            active,
         )
     except Exception:
         return
 
 
 def _pulse_visual_cursor(page: Any, locator: Any) -> None:
-    try:
-        bounding_box = locator.bounding_box(timeout=500)
-    except Exception:
-        return
-    if not bounding_box:
-        return
-    x = bounding_box["x"] + bounding_box["width"] / 2
-    y = bounding_box["y"] + bounding_box["height"] / 2
-    _set_visual_cursor_position(page, x, y, active=True)
+    _set_visual_cursor_active(page, True)
     try:
         page.wait_for_timeout(120)
     except Exception:
         pass
-    _set_visual_cursor_position(page, x, y, active=False)
+    _set_visual_cursor_active(page, False)
 
 
 def _click_locator(page: Any, locator: Any, *, show_cursor: bool = True) -> None:

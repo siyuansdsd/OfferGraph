@@ -686,6 +686,31 @@ class LinkedInContentEditorToolTest(TestCase):
         self.assertTrue(result["image_upload"]["finalized"])
         self.assertTrue(result["image_upload"]["post_review_ready"])
 
+    def test_open_linkedin_composer_uses_smooth_visual_cursor(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            state_path = Path(tmp_dir) / "linkedin.json"
+            state_path.write_text("{}", encoding="utf-8")
+            page = FakePage()
+            browser = FakeBrowser(page)
+            browser_type = FakeBrowserType(browser)
+
+            with patch(
+                "tools.linkedin.content_editor.sync_playwright",
+                return_value=FakePlaywrightManager(browser_type),
+            ):
+                open_linkedin_composer(
+                    str(state_path),
+                    headless=True,
+                    draft="Final post text",
+                )
+
+        evaluate_scripts = "\n".join(script for script, _ in page.evaluate_calls)
+        self.assertIn("requestAnimationFrame", evaluate_scripts)
+        self.assertIn("__offergraphAnimateCursorTo", evaluate_scripts)
+        self.assertIn("__offergraphSetCursorActive", evaluate_scripts)
+        self.assertGreater(len(page.mouse.moves), 0)
+        self.assertTrue(all(move[2] == 16 for move in page.mouse.moves))
+
     def test_open_linkedin_composer_uses_file_chooser_when_input_is_not_attached(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             state_path = Path(tmp_dir) / "linkedin.json"
