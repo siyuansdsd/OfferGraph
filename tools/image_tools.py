@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import base64
+import mimetypes
+import re
 import time
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
+import httpx
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import InjectedToolArg, InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
@@ -32,6 +36,26 @@ DEFAULT_OPENAI_IMAGE_SIZE = "1024x1024"
 DEFAULT_OPENAI_IMAGE_QUALITY = "auto"
 DEFAULT_IMAGE_OUTPUT_DIR = PROJECT_ROOT / "generated_assets" / "linkedin_images"
 DEFAULT_IMAGE_CANDIDATE_LIMIT = 5
+DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 30.0
+IMAGE_RELEVANCE_STOPWORDS = {
+    "about",
+    "after",
+    "analysis",
+    "announcement",
+    "clean",
+    "create",
+    "draft",
+    "image",
+    "linkedin",
+    "model",
+    "modern",
+    "news",
+    "post",
+    "professional",
+    "text",
+    "visual",
+    "with",
+}
 
 
 class ImageCandidate(BaseModel):
@@ -208,6 +232,22 @@ def generate_openai_image(
             image_b64,
             output_path or default_image_output_path(prompt),
         )
+    elif image_url:
+        try:
+            saved_path = download_image_url(
+                image_url,
+                output_path=output_path or default_image_output_path(prompt),
+                filename_hint=prompt,
+            )
+        except Exception as exc:
+            return OpenAIImageResult(
+                status="error",
+                message=f"OpenAI returned an image URL but download failed: {exc}",
+                prompt=prompt,
+                model=active_model,
+                image_url=image_url,
+                revised_prompt=revised_prompt,
+            )
 
     if saved_path or image_url:
         return OpenAIImageResult(
@@ -241,12 +281,71 @@ def save_base64_image(image_b64: str, output_path: str | Path) -> Path:
     return resolved_path
 
 
+def download_image_url(
+    image_url: str,
+    *,
+    output_path: str | Path | None = None,
+    filename_hint: str = "",
+    client: httpx.Client | None = None,
+    timeout: float = DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECONDS,
+) -> Path:
+    """Download an HTTP image URL to a local file path."""
+    url = image_url.strip()
+    if not _is_http_image_candidate(url):
+        raise ValueError("image_url must start with http:// or https://")
+
+    owns_client = client is None
+    active_client = client or httpx.Client(timeout=timeout, follow_redirects=True)
+    try:
+        response = active_client.get(url)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "")
+        image_bytes = response.content
+    finally:
+        if owns_client:
+            active_client.close()
+
+    if not image_bytes:
+        raise ValueError("downloaded image was empty")
+
+    resolved_output = Path(output_path).expanduser() if output_path else default_downloaded_image_path(
+        url,
+        filename_hint=filename_hint,
+        content_type=content_type,
+    )
+    if not resolved_output.is_absolute():
+        resolved_output = PROJECT_ROOT / resolved_output
+    if not resolved_output.suffix:
+        resolved_output = resolved_output.with_suffix(
+            _image_extension_from_metadata(url, content_type)
+        )
+    resolved_output.parent.mkdir(parents=True, exist_ok=True)
+    resolved_output.write_bytes(image_bytes)
+    return resolved_output
+
+
 def default_image_output_path(prompt: str) -> Path:
     """Return a generated asset path for an OpenAI image prompt."""
     safe_name = sanitize_filename(prompt, default="linkedin_image.md")
     stem = Path(safe_name).stem[:80] or "linkedin_image"
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     return DEFAULT_IMAGE_OUTPUT_DIR / f"{timestamp}_{stem}.png"
+
+
+def default_downloaded_image_path(
+    image_url: str,
+    *,
+    filename_hint: str = "",
+    content_type: str = "",
+) -> Path:
+    """Return a generated asset path for a downloaded image URL."""
+    parsed = urlparse(image_url)
+    hint = filename_hint or Path(parsed.path).stem or parsed.netloc or "linkedin_image"
+    safe_name = sanitize_filename(hint, default="linkedin_image.md")
+    stem = Path(safe_name).stem[:80] or "linkedin_image"
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    extension = _image_extension_from_metadata(image_url, content_type)
+    return DEFAULT_IMAGE_OUTPUT_DIR / f"{timestamp}_{stem}{extension}"
 
 
 @tool("linkedin-image-search", parse_docstring=True)
@@ -290,15 +389,51 @@ def linkedin_image_search(
             }
         )
 
-    filename = unique_filename("linkedin_image_candidates.md")
-    files[filename] = _format_image_candidates_file(query, candidates)
+    relevant_candidates = [
+        candidate
+        for candidate in candidates
+        if is_relevant_image_candidate(
+            candidate,
+            topic_text=f"{post_topic} {post_text}",
+        )
+    ]
+    downloaded_path = None
+    download_error = None
+    if relevant_candidates:
+        try:
+            downloaded_path = download_image_url(
+                relevant_candidates[0].url,
+                filename_hint=relevant_candidates[0].title or post_topic,
+            )
+        except Exception as exc:
+            download_error = str(exc)
 
-    if candidates:
+    filename = unique_filename("linkedin_image_candidates.md")
+    files[filename] = _format_image_candidates_file(
+        query,
+        candidates,
+        downloaded_path=str(downloaded_path) if downloaded_path else None,
+        download_error=download_error,
+    )
+
+    if relevant_candidates and downloaded_path:
         message = (
             f"Found {len(candidates)} image candidate(s) for '{query}'. "
-            f"Recommended first candidate: {candidates[0].url}. "
-            f"Saved candidates to {filename}. Prefer a searched image before "
-            "calling openai-image-generator."
+            f"Recommended relevant candidate: {relevant_candidates[0].url}. "
+            f"Downloaded local image path: {downloaded_path}. "
+            f"Saved candidates to {filename}. Pass this image_path to "
+            "linkedin-editor."
+        )
+    elif candidates:
+        relevance_note = (
+            "No relevant candidate matched the post topic."
+            if not relevant_candidates
+            else f"could not download the recommended image: {download_error}."
+        )
+        message = (
+            f"Found {len(candidates)} image candidate(s) for '{query}', but {relevance_note} "
+            f"Saved candidates to {filename}. Next: call openai-image-generator "
+            "with the image brief so linkedin-editor receives a local image_path."
         )
     else:
         message = (
@@ -396,6 +531,46 @@ def _is_http_image_candidate(url: str) -> bool:
     return url.startswith("http://") or url.startswith("https://")
 
 
+def is_relevant_image_candidate(candidate: ImageCandidate, *, topic_text: str) -> bool:
+    """Return whether a searched image candidate appears related to the post topic."""
+    terms = _important_image_terms(topic_text)
+    if not terms:
+        return True
+    haystack = " ".join(
+        value or ""
+        for value in (
+            candidate.url,
+            candidate.source_url,
+            candidate.title,
+            candidate.description,
+        )
+    ).lower()
+    return any(term in haystack for term in terms)
+
+
+def _important_image_terms(text: str) -> list[str]:
+    tokens = [
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9]+", text)
+        if len(token) >= 2
+    ]
+    priority = [
+        token
+        for token in tokens
+        if token not in IMAGE_RELEVANCE_STOPWORDS
+        and (any(char.isdigit() for char in token) or len(token) >= 4)
+    ]
+    seen: set[str] = set()
+    terms: list[str] = []
+    for token in priority:
+        if token not in seen:
+            seen.add(token)
+            terms.append(token)
+        if len(terms) >= 8:
+            break
+    return terms
+
+
 def _first_response_item(response: Any) -> Any | None:
     data = _get_response_field(response, "data")
     if isinstance(data, list) and data:
@@ -412,6 +587,9 @@ def _get_response_field(value: Any, field_name: str) -> Any:
 def _format_image_candidates_file(
     query: str,
     candidates: list[ImageCandidate],
+    *,
+    downloaded_path: str | None = None,
+    download_error: str | None = None,
 ) -> str:
     lines = [
         "# LinkedIn Image Candidates",
@@ -420,6 +598,20 @@ def _format_image_candidates_file(
         f"**Date:** {get_today_str()}",
         "",
     ]
+    if downloaded_path:
+        lines.extend(
+            [
+                f"**Recommended local image path:** {downloaded_path}",
+                "",
+            ]
+        )
+    elif download_error:
+        lines.extend(
+            [
+                f"**Recommended image download error:** {download_error}",
+                "",
+            ]
+        )
 
     if not candidates:
         lines.append("No usable image candidates were found.")
@@ -440,8 +632,22 @@ def _format_image_candidates_file(
     return "\n".join(lines)
 
 
+def _image_extension_from_metadata(image_url: str, content_type: str = "") -> str:
+    parsed_suffix = Path(urlparse(image_url).path).suffix.lower()
+    if parsed_suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+        return parsed_suffix
+
+    content_type = content_type.split(";", 1)[0].strip().lower()
+    if content_type:
+        guessed = mimetypes.guess_extension(content_type)
+        if guessed in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+            return guessed
+    return ".png"
+
+
 __all__ = [
     "DEFAULT_IMAGE_CANDIDATE_LIMIT",
+    "DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECONDS",
     "DEFAULT_IMAGE_OUTPUT_DIR",
     "DEFAULT_OPENAI_IMAGE_MODEL",
     "DEFAULT_OPENAI_IMAGE_QUALITY",
@@ -452,9 +658,12 @@ __all__ = [
     "OpenAIImageResult",
     "TAVILY_API_KEY_ENV",
     "build_image_search_query",
+    "default_downloaded_image_path",
     "default_image_output_path",
+    "download_image_url",
     "extract_image_candidates",
     "generate_openai_image",
+    "is_relevant_image_candidate",
     "linkedin_image_search",
     "openai_image_generator",
     "run_tavily_image_search",
