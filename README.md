@@ -26,6 +26,7 @@ approval gates.
 | Plan Master | Coordinates research, sub-agents, TODOs, and workflow handoffs |
 | LinkedIn Master | Creates LinkedIn post drafts and routes browser publishing through approval gates |
 | CV Tailoring MCP | Runs CV tailoring as a separate MCP service that agents can call |
+| GitHub Project Data | Reads repository metrics and recent project progress for LinkedIn content |
 | Browser Tools | Uses Playwright for authenticated LinkedIn flows |
 | Safety Controls | Keeps login, publishing, and future application submission user-controlled |
 
@@ -38,8 +39,10 @@ flowchart LR
   PlanMaster --> ResearchAgent[research-agent]
   PlanMaster --> LinkedInMaster[linkedin-master]
   PlanMaster --> CVMCP[CV Tailoring MCP]
+  LinkedInMaster --> GitHubInspector[github-project-inspector]
   LinkedInMaster --> LinkedInEditor[linkedin-editor]
   LinkedInEditor --> Playwright[Playwright Browser]
+  GitHubInspector --> GitHubAPI[GitHub REST API]
   CVMCP --> CVMaker[external/cv_maker]
   CVMaker --> LocalData[local_data/cv_maker/user_content]
 ```
@@ -59,6 +62,8 @@ Fill `.env` with local secrets:
 ```bash
 TAVILY_API_KEY=...
 MINIMAX_API_KEY=...
+# Optional, for higher GitHub API rate limits.
+GITHUB_TOKEN=...
 ```
 
 ## Agent Console
@@ -98,6 +103,25 @@ To initialize LinkedIn auth state manually:
 ./.venv/bin/python -m playwright install chromium
 ./.venv/bin/python scripts/setup_linkedin_auth.py
 ```
+
+## GitHub Project Data
+
+LinkedIn content workflows can inspect public GitHub repositories before drafting
+project-progress posts. When a user request includes a GitHub URL or `owner/repo`
+reference, `linkedin-master` can call:
+
+```text
+github-project-inspector
+```
+
+The tool saves repository evidence into the agent file system, including:
+
+- stars, forks, watchers, open issues, language, topics, license, and last push
+- recent pull requests, issues, commits, and releases
+- an optional README excerpt
+
+Use `GITHUB_TOKEN` in `.env` for higher GitHub API rate limits. Public
+repositories can still be inspected without a token.
 
 ## CV Tailoring MCP
 
