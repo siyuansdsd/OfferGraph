@@ -11,6 +11,7 @@ from tools.image_tools import (
     OPENAI_API_KEY_ENV,
     TAVILY_API_KEY_ENV,
     build_image_search_query,
+    download_image_url,
     extract_image_candidates,
     generate_openai_image,
     linkedin_image_search,
@@ -86,8 +87,11 @@ class ImageToolsTest(TestCase):
     def test_linkedin_image_search_saves_candidates_to_state(self) -> None:
         with patch(
             "tools.image_tools.run_tavily_image_search",
-            return_value={"images": ["https://example.com/image.png"]},
-        ), patch("tools.image_tools.unique_filename", return_value="images.md"):
+            return_value={"images": ["https://example.com/minimax-m3-image.png"]},
+        ), patch("tools.image_tools.download_image_url", return_value=Path("/tmp/image.png")), patch(
+            "tools.image_tools.unique_filename",
+            return_value="images.md",
+        ):
             command = linkedin_image_search.func(
                 "MiniMax news",
                 {"files": {}},
@@ -98,9 +102,46 @@ class ImageToolsTest(TestCase):
             )
 
         self.assertIn("images.md", command.update["files"])
-        self.assertIn("https://example.com/image.png", command.update["files"]["images.md"])
+        self.assertIn("https://example.com/minimax-m3-image.png", command.update["files"]["images.md"])
+        self.assertIn("/tmp/image.png", command.update["files"]["images.md"])
         self.assertIn("Found 1 image candidate", command.update["messages"][0].content)
+        self.assertIn("Downloaded local image path", command.update["messages"][0].content)
         self.assertEqual(command.update["messages"][0].tool_call_id, "call-1")
+
+    def test_linkedin_image_search_reports_download_failure(self) -> None:
+        with patch(
+            "tools.image_tools.run_tavily_image_search",
+            return_value={"images": ["https://example.com/minimax-m3-image.png"]},
+        ), patch(
+            "tools.image_tools.download_image_url",
+            side_effect=RuntimeError("download failed"),
+        ), patch("tools.image_tools.unique_filename", return_value="images.md"):
+            command = linkedin_image_search.func(
+                "MiniMax news",
+                {"files": {}},
+                "call-1",
+            )
+
+        self.assertIn("download failed", command.update["files"]["images.md"])
+        self.assertIn("could not download", command.update["messages"][0].content)
+        self.assertIn("openai-image-generator", command.update["messages"][0].content)
+
+    def test_linkedin_image_search_skips_irrelevant_candidate_download(self) -> None:
+        with patch(
+            "tools.image_tools.run_tavily_image_search",
+            return_value={"images": ["https://example.com/random-local-news.png"]},
+        ), patch("tools.image_tools.download_image_url") as download_mock, patch(
+            "tools.image_tools.unique_filename",
+            return_value="images.md",
+        ):
+            command = linkedin_image_search.func(
+                "MiniMax M3 news",
+                {"files": {}},
+                "call-1",
+            )
+
+        self.assertIn("No relevant candidate", command.update["messages"][0].content)
+        download_mock.assert_not_called()
 
     def test_linkedin_image_search_reports_generation_fallback_when_empty(self) -> None:
         with patch(
@@ -125,6 +166,27 @@ class ImageToolsTest(TestCase):
             )
             self.assertEqual(saved_path, output_path)
             self.assertEqual(output_path.read_bytes(), b"image-bytes")
+
+    def test_download_image_url_writes_file(self) -> None:
+        response = Mock()
+        response.headers = {"content-type": "image/png"}
+        response.content = b"image-bytes"
+        response.raise_for_status = Mock()
+        client = Mock()
+        client.get.return_value = response
+
+        with TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir) / "downloaded"
+            saved_path = download_image_url(
+                "https://example.com/image",
+                output_path=output_path,
+                client=client,
+            )
+
+            self.assertEqual(saved_path, output_path.with_suffix(".png"))
+            self.assertEqual(saved_path.read_bytes(), b"image-bytes")
+        client.get.assert_called_once_with("https://example.com/image")
+        response.raise_for_status.assert_called_once()
 
     def test_generate_openai_image_saves_base64_response(self) -> None:
         generated = base64.b64encode(b"image-bytes").decode("ascii")
@@ -163,6 +225,45 @@ class ImageToolsTest(TestCase):
             size="1024x1024",
             quality="auto",
             n=1,
+        )
+
+    def test_generate_openai_image_downloads_url_response(self) -> None:
+        fake_client = SimpleNamespace(
+            images=SimpleNamespace(
+                generate=Mock(
+                    return_value=SimpleNamespace(
+                        data=[
+                            SimpleNamespace(
+                                b64_json=None,
+                                revised_prompt="revised",
+                                url="https://example.com/generated.png",
+                            )
+                        ]
+                    )
+                )
+            )
+        )
+
+        with TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir) / "image.png"
+            with patch(
+                "tools.image_tools.download_image_url",
+                return_value=output_path,
+            ) as download_mock:
+                result = generate_openai_image(
+                    "A clean LinkedIn chart",
+                    output_path=output_path,
+                    model="gpt-image-test",
+                    client=fake_client,
+                )
+
+        self.assertEqual(result.status, "generated")
+        self.assertEqual(result.image_path, str(output_path))
+        self.assertEqual(result.image_url, "https://example.com/generated.png")
+        download_mock.assert_called_once_with(
+            "https://example.com/generated.png",
+            output_path=output_path,
+            filename_hint="A clean LinkedIn chart",
         )
 
     def test_generate_openai_image_reports_missing_api_key(self) -> None:

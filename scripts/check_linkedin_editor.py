@@ -56,6 +56,37 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--image-path",
+        dest="image_path",
+        default=None,
+        help="Local image file path to upload into the LinkedIn composer.",
+    )
+    parser.add_argument(
+        "--image-url",
+        dest="image_url",
+        default=None,
+        help="Remote image URL to download locally and upload into the LinkedIn composer.",
+    )
+    parser.add_argument(
+        "--alt-text",
+        dest="alt_text",
+        default=None,
+        help="Optional alt text for the uploaded image.",
+    )
+    parser.add_argument(
+        "--text-only",
+        dest="text_only",
+        action="store_true",
+        help="Disable automatic image search/generation and allow a text-only draft.",
+    )
+    parser.add_argument(
+        "--hide-cursor",
+        dest="show_cursor",
+        action="store_false",
+        default=True,
+        help="Disable the visible Playwright cursor overlay.",
+    )
+    parser.add_argument(
         "--mode",
         choices=(AUTO_MODE, APPROVE_MODE),
         default=None,
@@ -74,6 +105,12 @@ def main() -> int:
             "post_text": args.post_text,
             "draft_only": not args.publish,
             "publish": args.publish,
+            "image_path": args.image_path,
+            "image_url": args.image_url,
+            "alt_text": args.alt_text,
+            "auto_image": not args.text_only,
+            "require_image": not args.text_only,
+            "show_cursor": args.show_cursor,
             "execution_mode": args.mode,
         }
     )

@@ -47,10 +47,10 @@ Auth is handled through the LinkedIn editor/auth flow. If `linkedin-editor` retu
 7. Draft the LinkedIn post text.
 8. Create an image brief that can be used by an image generation or design tool.
 9. Call `linkedin-image-search` first to find a matching image candidate for the post. Use the post topic, final post text, and image brief.
-10. If `linkedin-image-search` finds a usable candidate, prefer that candidate and include the image URL/source in the final output.
-11. If `linkedin-image-search` finds no usable candidate or fails, call `openai-image-generator` with a specific image prompt derived from the image brief.
+10. If `linkedin-image-search` returns a downloaded local image path, use that exact `image_path` for `linkedin-editor`.
+11. If `linkedin-image-search` finds no usable local image path or download fails, call `openai-image-generator` with a specific image prompt derived from the image brief, then use its local `image_path`.
 12. Save draft artifacts with `write_file` when useful.
-13. Use `linkedin-editor` to open LinkedIn and prepare the draft. Pass the final post body in `post_text` so the browser composer receives the exact draft. Never call `linkedin-editor` with only a task brief.
+13. Use `linkedin-editor` to open LinkedIn and prepare the draft. Pass the final post body in `post_text` so the browser composer receives the exact draft. Pass `image_path` and `alt_text` when a local image is available. If no image path is available, still call `linkedin-editor` with its default `auto_image=true` and `require_image=true` so it searches or generates the image before opening LinkedIn. Never call `linkedin-editor` with only a task brief.
 14. If the user explicitly asks to post/publish and the publish policy is `publish_after_confirmation`, call `linkedin-editor` with `draft_only=false` and `publish=true`. The tool must still ask the terminal for y/n confirmation before clicking Post.
 15. If the user did not explicitly ask to post/publish, call `linkedin-editor` with `draft_only=true` and `publish=false`.
 16. Do not report the LinkedIn handoff as complete until `linkedin-editor` returns `draft_ready`, `published`, `needs_confirmation`, `needs_approval`, `manual_required`, or `error`.
@@ -89,6 +89,7 @@ LinkedIn editor status:
 - Keep the post useful, specific, and non-hype.
 - Never bypass terminal confirmation for publishing.
 - For images, always try `linkedin-image-search` before `openai-image-generator`.
+- Do not claim an image is attached unless `linkedin-editor` receives `image_path` or `image_url`.
 - Never put task instructions, outlines, image briefs, source notes, or planning text into `linkedin-editor.post_text`; it must contain only the final post body.
 - Prefer draft preparation unless the user explicitly asked to post/publish.
 - If auth is missing, guide the user through the auth setup flow instead of bypassing it.
