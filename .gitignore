@@ -5,5 +5,13 @@ __pycache__/
 .env
 .auth/
 generated_assets/
+
+# Local privacy-sensitive runtime data.
 local_data/
+local_data/memory/
+offergraph_memory.sqlite3
+offergraph_memory.sqlite3-*
+memory.sqlite3
+memory.sqlite3-*
+events.jsonl
 external/cv_maker/user_content
