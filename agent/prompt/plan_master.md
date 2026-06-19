@@ -25,6 +25,13 @@ Your operating pattern is based on a offer graph workflow:
 
 {file_usage_instructions}
 
+## MEMORY USAGE
+
+Use `memory-search` before repeating browser-heavy or previously completed workflows.
+For LinkedIn, browser, GitHub, or job application tasks, search memory for relevant
+prior traces, failures, selectors, URLs, and final results. Use memory as context,
+but verify current facts when recency matters.
+
 ## SUB-AGENT DELEGATION
 
 {subagent_usage_instructions}

@@ -24,6 +24,7 @@ from agent.model_selection import resolve_model_reference
 from agent.prompt import render_prompt
 from config.env import get_env
 from tools.file_tools import ls, read_file, write_file
+from tools.memory_tools import memory_search
 from tools.research_tools import get_today_str, tavily_search, think_tool
 from tools.state import PlanMasterState
 from tools.todo_tools import read_todos, write_todos
@@ -116,7 +117,7 @@ def build_researcher_prompt(config: PlanMasterConfig | None = None) -> str:
 
 def get_research_tools() -> list[BaseTool]:
     """Return tools available to research sub-agents."""
-    return [tavily_search, think_tool]
+    return [memory_search, tavily_search, think_tool]
 
 
 def get_plan_master_tools() -> list[BaseTool]:
@@ -127,6 +128,7 @@ def get_plan_master_tools() -> list[BaseTool]:
         write_file,
         write_todos,
         read_todos,
+        memory_search,
         tavily_search,
         think_tool,
     ]

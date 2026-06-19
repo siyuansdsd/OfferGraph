@@ -8,6 +8,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 from pydantic import BaseModel, Field
 
+from agent.memory import record_browser_trace_safely
 from tools.approval import ApprovalRequest, request_user_approval
 from tools.linkedin.auth import LINKEDIN_FEED_URL
 
@@ -262,6 +263,99 @@ def publish_or_save_draft(
     }
 
 
+def record_linkedin_editor_memory(
+    *,
+    task: str,
+    draft: str,
+    browser_result: dict[str, Any] | None,
+    status: str,
+    message: str,
+    publish: bool,
+    success: bool,
+    error: str | None = None,
+) -> None:
+    """Record a sanitized LinkedIn browser trace for future retrieval."""
+    result = browser_result or {}
+    url = str(result.get("url") or LINKEDIN_FEED_URL)
+    actions: list[dict[str, Any]] = [
+        {
+            "type": "navigate",
+            "label": "Open LinkedIn feed",
+            "url": LINKEDIN_FEED_URL,
+            "success": success or bool(browser_result),
+        }
+    ]
+    if result.get("composer_selector"):
+        actions.append(
+            {
+                "type": "click",
+                "label": "Open LinkedIn post composer",
+                "selector": str(result["composer_selector"]),
+                "success": True,
+            }
+        )
+    if result.get("editor_selector"):
+        actions.append(
+            {
+                "type": "fill",
+                "label": "Insert final LinkedIn post text",
+                "selector": str(result["editor_selector"]),
+                "success": bool(result.get("draft_inserted", True)),
+                "details": {
+                    "draft_character_count": len(draft),
+                    "draft_preview": _preview_text(draft),
+                },
+            }
+        )
+    if publish:
+        actions.append(
+            {
+                "type": "confirm",
+                "label": "Request terminal publish confirmation",
+                "success": bool(result.get("publish_confirmed")),
+            }
+        )
+    if result.get("post_selector"):
+        actions.append(
+            {
+                "type": "click",
+                "label": "Click LinkedIn Post button",
+                "selector": str(result["post_selector"]),
+                "success": bool(result.get("published")),
+            }
+        )
+
+    record_browser_trace_safely(
+        task=task,
+        final_result=f"{status}: {message}",
+        success=success,
+        url=url,
+        actions=actions,
+        extracted_data={
+            "status": status,
+            "draft_character_count": len(draft),
+            "draft_preview": _preview_text(draft),
+            "draft_inserted": bool(result.get("draft_inserted")),
+            "publish_requested": bool(result.get("publish_requested", publish)),
+            "publish_confirmed": bool(result.get("publish_confirmed")),
+            "published": bool(result.get("published")),
+            "composer_selector": result.get("composer_selector"),
+            "editor_selector": result.get("editor_selector"),
+            "post_selector": result.get("post_selector"),
+        },
+        error=error,
+        module="linkedin",
+        tags=["linkedin", "linkedin-editor", "playwright", status],
+        metadata={"tool": "linkedin-editor"},
+    )
+
+
+def _preview_text(text: str, *, max_chars: int = 500) -> str:
+    """Return a compact text preview for memory."""
+    normalized = " ".join(text.split())
+    return normalized[:max_chars]
+
+
 def confirm_linkedin_publish(input_func: Callable[[str], str] = input) -> bool:
     """Ask for explicit terminal confirmation before clicking LinkedIn Post."""
     answer = input_func(
@@ -410,6 +504,16 @@ def linkedin_editor(
             publish=publish,
         )
     except (FileNotFoundError, LinkedInEditorBrowserError, PlaywrightError) as exc:
+        record_linkedin_editor_memory(
+            task=task,
+            draft=draft,
+            browser_result=None,
+            status="error",
+            message=str(exc),
+            publish=publish,
+            success=False,
+            error=str(exc),
+        )
         return LinkedInEditorResult(
             status="error",
             message=str(exc),
@@ -421,6 +525,15 @@ def linkedin_editor(
         draft,
         publish=publish,
         browser_result=browser_result,
+    )
+    record_linkedin_editor_memory(
+        task=task,
+        draft=draft,
+        browser_result=browser_result,
+        status=publish_decision["status"],
+        message=publish_decision["message"],
+        publish=publish,
+        success=publish_decision["status"] in {"draft_ready", "needs_confirmation", "published"},
     )
 
     return LinkedInEditorResult(

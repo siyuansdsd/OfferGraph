@@ -19,6 +19,7 @@ from tools.file_tools import ls, read_file, write_file
 from tools.github_project import github_project_inspector
 from tools.image_tools import linkedin_image_search, openai_image_generator
 from tools.linkedin.content_editor import linkedin_editor
+from tools.memory_tools import memory_search
 from tools.research_tools import get_today_str, tavily_search, think_tool
 from tools.state import PlanMasterState
 
@@ -73,6 +74,7 @@ def build_linkedin_master_prompt(config: LinkedInMasterConfig | None = None) -> 
 def get_linkedin_master_tools() -> list[BaseTool]:
     """Return tools available to the LinkedIn Master agent."""
     return [
+        memory_search,
         tavily_search,
         think_tool,
         ls,
