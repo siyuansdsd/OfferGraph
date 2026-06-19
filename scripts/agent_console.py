@@ -31,6 +31,7 @@ from agent.model_selection import (  # noqa: E402
     list_console_model_choices,
     resolve_model_reference,
 )
+from agent.mcp_clients import load_cv_tailoring_mcp_tools_sync  # noqa: E402
 
 
 AGENT_CHOICES = ("linkedin-master", "plan-master")
@@ -68,6 +69,11 @@ def parse_args() -> argparse.Namespace:
         "--extra-need",
         default="Create a practical LinkedIn post for OfferGraph.",
         help="Additional content requirements injected into the agent prompt.",
+    )
+    parser.add_argument(
+        "--with-cv-tailoring-mcp",
+        action="store_true",
+        help="Load CV Maker tools from the separate CV Tailoring MCP service.",
     )
     return parser.parse_args()
 
@@ -108,17 +114,26 @@ def choose_model(args_model: str | None) -> str:
     return get_console_model_choice()
 
 
-def build_agent(agent_name: str, model: Any, industry: str, extra_need: str) -> Any:
+def build_agent(
+    agent_name: str,
+    model: Any,
+    industry: str,
+    extra_need: str,
+    *,
+    extra_tools: list[Any] | None = None,
+) -> Any:
     """Build the selected agent."""
     if agent_name == "plan-master":
         return create_plan_master_agent(
             model=model,
             config=PlanMasterConfig(industry=industry, extra_need=extra_need),
+            extra_tools=extra_tools,
         )
 
     return create_linkedin_master_agent(
         model=model,
         config=LinkedInMasterConfig(industry=industry, extra_need=extra_need),
+        extra_tools=extra_tools,
     )
 
 
@@ -192,7 +207,16 @@ def main() -> int:
     model = resolve_model_reference(model_choice)
     message = args.message or input("Message: ").strip()
 
-    agent = build_agent(args.agent, model, args.industry, args.extra_need)
+    extra_tools = (
+        load_cv_tailoring_mcp_tools_sync() if args.with_cv_tailoring_mcp else None
+    )
+    agent = build_agent(
+        args.agent,
+        model,
+        args.industry,
+        args.extra_need,
+        extra_tools=extra_tools,
+    )
     run_agent(agent, args.agent, message)
     return 0
 

@@ -9,7 +9,9 @@ from rich.console import Console
 
 from scripts.agent_console import (
     DEFAULT_CONSOLE_MODEL_CHOICE,
+    build_agent,
     choose_model,
+    main,
     prompt_for_model_choice,
     run_agent,
 )
@@ -33,6 +35,59 @@ class AgentConsoleTest(TestCase):
     def test_prompt_for_model_choice_accepts_index(self) -> None:
         with patch("builtins.input", return_value="2"), patch("builtins.print"):
             self.assertEqual(prompt_for_model_choice(), "MiniMax-M2.5")
+
+    def test_build_agent_passes_extra_tools_to_plan_master(self) -> None:
+        extra_tool = object()
+
+        with patch("scripts.agent_console.create_plan_master_agent") as create_mock:
+            build_agent(
+                "plan-master",
+                "test:model",
+                "AI",
+                "Need",
+                extra_tools=[extra_tool],
+            )
+
+        _, kwargs = create_mock.call_args
+        self.assertEqual(kwargs["extra_tools"], [extra_tool])
+
+    def test_main_loads_cv_tailoring_mcp_tools_when_enabled(self) -> None:
+        fake_agent = object()
+        fake_tool = object()
+
+        with patch(
+            "scripts.agent_console.parse_args",
+            return_value=SimpleNamespace(
+                agent="linkedin-master",
+                model="default",
+                message="Tailor my CV",
+                industry="AI",
+                extra_need="Need",
+                with_cv_tailoring_mcp=True,
+            ),
+        ), patch(
+            "scripts.agent_console.resolve_model_reference",
+            return_value="test:model",
+        ), patch(
+            "scripts.agent_console.load_cv_tailoring_mcp_tools_sync",
+            return_value=[fake_tool],
+        ) as load_tools, patch(
+            "scripts.agent_console.build_agent",
+            return_value=fake_agent,
+        ) as build_mock, patch(
+            "scripts.agent_console.run_agent",
+            return_value={},
+        ):
+            self.assertEqual(main(), 0)
+
+        load_tools.assert_called_once_with()
+        build_mock.assert_called_once_with(
+            "linkedin-master",
+            "test:model",
+            "AI",
+            "Need",
+            extra_tools=[fake_tool],
+        )
 
     def test_run_agent_streams_formatted_updates(self) -> None:
         class FakeAgent:

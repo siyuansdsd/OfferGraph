@@ -147,6 +147,24 @@ class PlanMasterTest(TestCase):
         self.assertIn("fintech", kwargs["system_prompt"])
         self.assertIn("make it concise", kwargs["system_prompt"])
 
+    def test_create_plan_master_agent_passes_extra_tools_to_deepagents(self) -> None:
+        fake_agent = Mock()
+        extra_tool = Mock()
+        extra_tool.name = "cv_tailor_resume"
+
+        with patch("agent.agent.plan_master.create_deep_agent", return_value=fake_agent) as create_mock:
+            create_plan_master_agent(
+                model="test:model",
+                config=PlanMasterConfig(date="Wed Jun 10, 2026"),
+                extra_tools=[extra_tool],
+            )
+
+        _, kwargs = create_mock.call_args
+        self.assertEqual(
+            [tool.name for tool in kwargs["tools"]],
+            ["tavily_search", "think_tool", "cv_tailor_resume"],
+        )
+
     def test_create_plan_master_agent_can_use_langchain_agent(self) -> None:
         fake_agent = Mock()
         with patch("agent.agent.plan_master.create_agent", return_value=fake_agent) as create_mock:
