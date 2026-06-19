@@ -4,3 +4,5 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 .auth/
+local_data/
+external/cv_maker/user_content
