@@ -44,6 +44,8 @@ class LinkedInMasterTest(TestCase):
         self.assertIn("draft_only", prompt)
         self.assertIn("Structured Output", prompt)
         self.assertIn("linkedin-editor", prompt)
+        self.assertIn("linkedin-image-search", prompt)
+        self.assertIn("openai-image-generator", prompt)
 
     def test_build_prompt_defaults_to_publish_after_confirmation(self) -> None:
         prompt = build_linkedin_master_prompt(
@@ -63,6 +65,8 @@ class LinkedInMasterTest(TestCase):
                 "ls",
                 "read_file",
                 "write_file",
+                "linkedin-image-search",
+                "openai-image-generator",
                 "linkedin-editor",
             ],
         )
