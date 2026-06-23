@@ -128,6 +128,45 @@ class TestDriveArchive(unittest.TestCase):
             self.assertIn(["rclone", "mkdir", "gdrive:CV Maker Archive/2026-05-20"], calls)
             self.assertIn(["rclone", "mkdir", "gdrive:CV Maker Archive/2026-05-21"], calls)
 
+    def test_archive_generated_files_at_least_two_days_old_keeps_yesterday_and_today(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generated = root / "generated"
+            generated.mkdir()
+            manifest = root / "manifest.json"
+            three_days_old = generated / "ThreeDaysOld.pdf"
+            two_days_old = generated / "TwoDaysOld.docx"
+            yesterday = generated / "Yesterday.pdf"
+            today_file = generated / "Today.pdf"
+            for path in (three_days_old, two_days_old, yesterday, today_file):
+                path.write_text(path.name, encoding="utf-8")
+
+            today = date(2026, 5, 23)
+            _touch_day(three_days_old, date(2026, 5, 20))
+            _touch_day(two_days_old, date(2026, 5, 21))
+            _touch_day(yesterday, date(2026, 5, 22))
+            _touch_day(today_file, today)
+
+            def fake_runner(args, **kwargs):
+                stdout = f"https://drive.google.com/{args[-1].split('/')[-1]}\n" if args[1] == "link" else ""
+                return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
+
+            results = drive_archive.archive_generated_files_at_least_days_old(
+                min_age_days=2,
+                today=today,
+                remote="gdrive:CV Maker Archive",
+                source_dir=generated,
+                manifest_file=manifest,
+                runner=fake_runner,
+                require_rclone=False,
+            )
+
+            self.assertEqual([result.date for result in results], ["2026-05-20", "2026-05-21"])
+            self.assertFalse(three_days_old.exists())
+            self.assertFalse(two_days_old.exists())
+            self.assertTrue(yesterday.exists())
+            self.assertTrue(today_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

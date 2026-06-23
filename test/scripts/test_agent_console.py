@@ -132,7 +132,7 @@ class AgentConsoleTest(TestCase):
         ), patch(
             "scripts.agent_console.load_cv_tailoring_mcp_tools_sync",
             return_value=[],
-        ), patch(
+        ) as load_tools, patch(
             "scripts.agent_console.build_agent",
             return_value=fake_agent,
         ), patch(
@@ -140,6 +140,7 @@ class AgentConsoleTest(TestCase):
         ) as chat_mock:
             self.assertEqual(main(), 0)
 
+        load_tools.assert_not_called()
         chat_mock.assert_called_once()
 
     def test_run_agent_streams_formatted_updates(self) -> None:
@@ -184,6 +185,51 @@ class AgentConsoleTest(TestCase):
         self.assertIn("doing: starting", text)
         self.assertIn("details: Working on it.", text)
         self.assertIn("doing: completed", text)
+
+    def test_run_agent_prefers_async_stream_when_available(self) -> None:
+        class FakeAgent:
+            def __init__(self) -> None:
+                self.astream_args = None
+                self.stream_called = False
+
+            async def astream(self, payload, stream_mode=None):
+                self.astream_args = (payload, stream_mode)
+                message = SimpleNamespace(
+                    type="ai",
+                    name="plan-master",
+                    content="Async done.",
+                    tool_calls=[],
+                    invalid_tool_calls=[],
+                    response_metadata={"finish_reason": "stop"},
+                    id="message-async",
+                )
+                yield {"messages": [message]}
+
+            def stream(self, payload, stream_mode=None):
+                self.stream_called = True
+                return iter([])
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=False, color_system=None, width=120)
+        agent = FakeAgent()
+
+        result = run_agent(
+            agent,
+            "plan-master",
+            "Tailor my CV",
+            console=console,
+        )
+
+        self.assertEqual(
+            agent.astream_args,
+            (
+                {"messages": [{"role": "user", "content": "Tailor my CV"}]},
+                "updates",
+            ),
+        )
+        self.assertFalse(agent.stream_called)
+        self.assertEqual(result["messages"][0].content, "Async done.")
+        self.assertIn("details: Async done.", output.getvalue())
 
     def test_chat_loop_runs_until_exit(self) -> None:
         class FakeAgent:

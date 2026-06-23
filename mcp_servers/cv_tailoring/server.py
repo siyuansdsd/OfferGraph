@@ -21,6 +21,13 @@ DEFAULT_CV_MAKER_PROJECT_ROOT = PROJECT_ROOT / "external" / "cv_maker"
 DEFAULT_CV_MAKER_USER_CONTENT_DIR = (
     PROJECT_ROOT / "local_data" / "cv_maker" / "user_content"
 )
+CV_MAKER_USER_CONTENT_DIRS = (
+    "library",
+    "templates",
+    "inputs",
+    "generated_cvs",
+    "logs",
+)
 CV_MAKER_PROJECT_ROOT_ENV = "CV_MAKER_PROJECT_ROOT"
 CV_MAKER_USER_CONTENT_DIR_ENV = "CV_MAKER_USER_CONTENT_DIR"
 CV_MAKER_PYTHON_ENV = "CV_MAKER_PYTHON"
@@ -269,7 +276,7 @@ def resolve_cv_maker_project_root() -> Path:
 def ensure_cv_maker_user_content(project_root: Path) -> Path:
     """Ensure vendored CV Maker uses ignored local user_content data."""
     user_content_dir = get_configured_user_content_dir().resolve()
-    user_content_dir.mkdir(parents=True, exist_ok=True)
+    ensure_cv_maker_user_content_structure(user_content_dir)
 
     link_path = project_root / "user_content"
     if not _should_manage_user_content_link(project_root):
@@ -289,6 +296,13 @@ def ensure_cv_maker_user_content(project_root: Path) -> Path:
 
     link_path.symlink_to(user_content_dir, target_is_directory=True)
     return link_path
+
+
+def ensure_cv_maker_user_content_structure(user_content_dir: Path) -> None:
+    """Create the private CV Maker user_content directory layout."""
+    user_content_dir.mkdir(parents=True, exist_ok=True)
+    for relative_dir in CV_MAKER_USER_CONTENT_DIRS:
+        (user_content_dir / relative_dir).mkdir(parents=True, exist_ok=True)
 
 
 def _should_manage_user_content_link(project_root: Path) -> bool:

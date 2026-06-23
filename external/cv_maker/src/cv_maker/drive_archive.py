@@ -24,6 +24,7 @@ USER_CONTENT = PROJECT_ROOT / "user_content"
 GENERATED_DIR = USER_CONTENT / "generated_cvs"
 ARCHIVE_MANIFEST_FILE = USER_CONTENT / "drive_archive_manifest.json"
 DEFAULT_DATE_VALUE = "yesterday"
+DEFAULT_MIN_ARCHIVE_AGE_DAYS = 2
 ARCHIVABLE_EXTENSIONS = {".docx", ".pdf", ".tex"}
 
 
@@ -128,14 +129,19 @@ def _run_rclone(
     rclone_path: str,
     runner: Runner,
 ) -> subprocess.CompletedProcess:
-    return runner(
-        [rclone_path, *args],
-        cwd=str(PROJECT_ROOT),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=True,
-    )
+    command = [rclone_path, *args]
+    try:
+        return runner(
+            command,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or str(exc)).strip()
+        raise RuntimeError(f"rclone failed: {' '.join(command)}\n{details}") from exc
 
 
 def _load_manifest(path: Path = ARCHIVE_MANIFEST_FILE) -> dict[str, Any]:
@@ -258,17 +264,28 @@ def archive_generated_files(
                 local_path.unlink()
                 deleted = True
 
-        archived_files.append(
-            ArchiveFile(
-                name=local_path.name,
-                local_path=_relative(local_path),
-                remote_path=remote_path,
-                download_link=download_link,
-                size=stat.st_size,
-                mtime=datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0).isoformat(),
-                deleted=deleted,
-            )
+        archived_file = ArchiveFile(
+            name=local_path.name,
+            local_path=_relative(local_path),
+            remote_path=remote_path,
+            download_link=download_link,
+            size=stat.st_size,
+            mtime=datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0).isoformat(),
+            deleted=deleted,
         )
+        archived_files.append(archived_file)
+
+        if not dry_run:
+            _merge_archive_result(
+                ArchiveResult(
+                    date=target.isoformat(),
+                    archived_at=archived_at,
+                    remote_dir=remote_dir,
+                    dry_run=dry_run,
+                    files=[archived_file],
+                ),
+                manifest_file,
+            )
 
     result = ArchiveResult(
         date=target.isoformat(),
@@ -314,6 +331,37 @@ def archive_generated_files_before(
     ]
 
 
+def archive_generated_files_at_least_days_old(
+    *,
+    min_age_days: int = DEFAULT_MIN_ARCHIVE_AGE_DAYS,
+    today: date | None = None,
+    remote: str | None = None,
+    source_dir: Path = GENERATED_DIR,
+    manifest_file: Path = ARCHIVE_MANIFEST_FILE,
+    delete_local: bool = True,
+    dry_run: bool = False,
+    rclone_path: str = "rclone",
+    runner: Runner = subprocess.run,
+    require_rclone: bool = True,
+) -> list[ArchiveResult]:
+    if min_age_days < 1:
+        raise ValueError("min_age_days must be at least 1.")
+
+    reference_date = today or datetime.now().date()
+    cutoff_date = reference_date - timedelta(days=min_age_days - 1)
+    return archive_generated_files_before(
+        cutoff_date=cutoff_date,
+        remote=remote,
+        source_dir=source_dir,
+        manifest_file=manifest_file,
+        delete_local=delete_local,
+        dry_run=dry_run,
+        rclone_path=rclone_path,
+        runner=runner,
+        require_rclone=require_rclone,
+    )
+
+
 def _print_result(result: ArchiveResult) -> None:
     print(f"Archive date: {result.date}")
     print(f"Remote dir: {result.remote_dir}")
@@ -336,6 +384,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Archive generated CV files to Google Drive using rclone.")
     parser.add_argument("--date", default=DEFAULT_DATE_VALUE, help="Date to archive: yesterday, today, or YYYY-MM-DD.")
     parser.add_argument("--before-today", action="store_true", help="Archive every generated file dated before today, grouped by file date.")
+    parser.add_argument(
+        "--older-than-days",
+        type=int,
+        default=None,
+        metavar="DAYS",
+        help="Archive files at least DAYS old, grouped by file date. Use 2 to archive two days ago and older.",
+    )
     parser.add_argument("--remote", default=None, help="Google Drive rclone destination, e.g. gdrive:CV Maker Archive.")
     parser.add_argument("--source-dir", default=str(GENERATED_DIR), help="Local generated files directory.")
     parser.add_argument("--manifest", default=str(ARCHIVE_MANIFEST_FILE), help="Local archive link manifest JSON path.")
@@ -345,7 +400,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        if args.before_today:
+        if args.older_than_days is not None:
+            results = archive_generated_files_at_least_days_old(
+                min_age_days=args.older_than_days,
+                remote=args.remote,
+                source_dir=Path(args.source_dir),
+                manifest_file=Path(args.manifest),
+                delete_local=not args.keep_local,
+                dry_run=args.dry_run,
+                rclone_path=args.rclone,
+            )
+            _print_results(results)
+        elif args.before_today:
             results = archive_generated_files_before(
                 remote=args.remote,
                 source_dir=Path(args.source_dir),

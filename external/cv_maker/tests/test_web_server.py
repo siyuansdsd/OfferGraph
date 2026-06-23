@@ -129,6 +129,27 @@ class TestWebServerData(unittest.TestCase):
                 "https://drive.google.com/mock",
             )
 
+    def test_run_archive_old_files_defaults_to_two_day_minimum_age(self):
+        result = web_server.drive_archive.ArchiveResult(
+            date="2026-05-21",
+            archived_at="2026-05-23T10:00:00",
+            remote_dir="gdrive:CV/2026-05-21",
+            dry_run=False,
+            files=[],
+        )
+
+        with patch.object(
+            web_server.drive_archive,
+            "archive_generated_files_at_least_days_old",
+            return_value=[result],
+        ) as archive:
+            payload = web_server.run_archive_old_files({"remote": "gdrive:CV"})
+
+        self.assertEqual(payload["batches"][0]["date"], "2026-05-21")
+        archive.assert_called_once()
+        self.assertEqual(archive.call_args.kwargs["min_age_days"], 2)
+        self.assertEqual(archive.call_args.kwargs["remote"], "gdrive:CV")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,31 +56,31 @@ class FakeGitHubClient:
 class GitHubProjectToolsTest(TestCase):
     def test_parse_github_repo_reference_accepts_common_forms(self) -> None:
         self.assertEqual(
-            parse_github_repo_reference("siyuansdsd/OfferGraph").full_name,
-            "siyuansdsd/OfferGraph",
+            parse_github_repo_reference("example-org/OfferGraph").full_name,
+            "example-org/OfferGraph",
         )
         self.assertEqual(
             parse_github_repo_reference(
-                "https://github.com/siyuansdsd/OfferGraph/pulls"
+                "https://github.com/example-org/OfferGraph/pulls"
             ).full_name,
-            "siyuansdsd/OfferGraph",
+            "example-org/OfferGraph",
         )
         self.assertEqual(
             parse_github_repo_reference(
-                "git@github.com:siyuansdsd/OfferGraph.git"
+                "git@github.com:example-org/OfferGraph.git"
             ).full_name,
-            "siyuansdsd/OfferGraph",
+            "example-org/OfferGraph",
         )
 
     def test_extract_github_repo_references_from_text(self) -> None:
         references = extract_github_repo_references(
-            "Review https://github.com/siyuansdsd/OfferGraph and "
+            "Review https://github.com/example-org/OfferGraph and "
             "https://github.com/jhcook/cv."
         )
 
         self.assertEqual(
             [reference.full_name for reference in references],
-            ["siyuansdsd/OfferGraph", "jhcook/cv"],
+            ["example-org/OfferGraph", "jhcook/cv"],
         )
 
     def test_build_github_headers_uses_token_when_available(self) -> None:
@@ -97,9 +97,9 @@ class GitHubProjectToolsTest(TestCase):
         readme = base64.b64encode(b"# OfferGraph\nAgent workspace.").decode("ascii")
         client = FakeGitHubClient(
             {
-                "/repos/siyuansdsd/OfferGraph": {
-                    "full_name": "siyuansdsd/OfferGraph",
-                    "html_url": "https://github.com/siyuansdsd/OfferGraph",
+                "/repos/example-org/OfferGraph": {
+                    "full_name": "example-org/OfferGraph",
+                    "html_url": "https://github.com/example-org/OfferGraph",
                     "description": "Offer hunter agent",
                     "stargazers_count": 12,
                     "forks_count": 3,
@@ -115,25 +115,25 @@ class GitHubProjectToolsTest(TestCase):
                     "archived": False,
                     "visibility": "public",
                 },
-                "/repos/siyuansdsd/OfferGraph/pulls": [
+                "/repos/example-org/OfferGraph/pulls": [
                     {
                         "number": 6,
                         "title": "Add image matcher",
                         "state": "open",
-                        "html_url": "https://github.com/siyuansdsd/OfferGraph/pull/6",
-                        "user": {"login": "siyuansdsd"},
+                        "html_url": "https://github.com/example-org/OfferGraph/pull/6",
+                        "user": {"login": "example-org"},
                         "created_at": "2026-06-18T00:00:00Z",
                         "updated_at": "2026-06-19T00:00:00Z",
                         "merged_at": None,
                     }
                 ],
-                "/repos/siyuansdsd/OfferGraph/issues": [
+                "/repos/example-org/OfferGraph/issues": [
                     {
                         "number": 7,
                         "title": "Track GitHub project progress",
                         "state": "open",
-                        "html_url": "https://github.com/siyuansdsd/OfferGraph/issues/7",
-                        "user": {"login": "siyuansdsd"},
+                        "html_url": "https://github.com/example-org/OfferGraph/issues/7",
+                        "user": {"login": "example-org"},
                         "created_at": "2026-06-18T00:00:00Z",
                         "updated_at": "2026-06-19T00:00:00Z",
                     },
@@ -143,29 +143,29 @@ class GitHubProjectToolsTest(TestCase):
                         "pull_request": {},
                     },
                 ],
-                "/repos/siyuansdsd/OfferGraph/commits": [
+                "/repos/example-org/OfferGraph/commits": [
                     {
                         "sha": "abcdef123456",
-                        "html_url": "https://github.com/siyuansdsd/OfferGraph/commit/abcdef1",
+                        "html_url": "https://github.com/example-org/OfferGraph/commit/abcdef1",
                         "commit": {
                             "message": "tools: image matcher\n\nBody",
                             "author": {
-                                "name": "Siyuan",
+                                "name": "Example Author",
                                 "date": "2026-06-19T00:00:00Z",
                             },
                         },
                     }
                 ],
-                "/repos/siyuansdsd/OfferGraph/releases": [
+                "/repos/example-org/OfferGraph/releases": [
                     {
                         "name": "v0.1",
                         "tag_name": "v0.1",
-                        "html_url": "https://github.com/siyuansdsd/OfferGraph/releases/tag/v0.1",
+                        "html_url": "https://github.com/example-org/OfferGraph/releases/tag/v0.1",
                         "published_at": "2026-06-19T00:00:00Z",
                         "prerelease": False,
                     }
                 ],
-                "/repos/siyuansdsd/OfferGraph/readme": {
+                "/repos/example-org/OfferGraph/readme": {
                     "content": readme,
                 },
             }
@@ -178,11 +178,11 @@ class GitHubProjectToolsTest(TestCase):
             else default,
         ):
             report = inspect_github_project(
-                "https://github.com/siyuansdsd/OfferGraph",
+                "https://github.com/example-org/OfferGraph",
                 client=client,
             )
 
-        self.assertEqual(report.repository["full_name"], "siyuansdsd/OfferGraph")
+        self.assertEqual(report.repository["full_name"], "example-org/OfferGraph")
         self.assertEqual(report.repository["stars"], 12)
         self.assertEqual(report.recent_pull_requests[0]["title"], "Add image matcher")
         self.assertEqual(report.recent_issues[0]["number"], 7)
@@ -196,20 +196,20 @@ class GitHubProjectToolsTest(TestCase):
 
     def test_github_project_inspector_saves_report_to_state(self) -> None:
         report = inspect_github_project(
-            "siyuansdsd/OfferGraph",
+            "example-org/OfferGraph",
             client=FakeGitHubClient(
                 {
-                    "/repos/siyuansdsd/OfferGraph": {
-                        "full_name": "siyuansdsd/OfferGraph",
-                        "html_url": "https://github.com/siyuansdsd/OfferGraph",
+                    "/repos/example-org/OfferGraph": {
+                        "full_name": "example-org/OfferGraph",
+                        "html_url": "https://github.com/example-org/OfferGraph",
                         "stargazers_count": 12,
                         "forks_count": 3,
                         "open_issues_count": 5,
                     },
-                    "/repos/siyuansdsd/OfferGraph/pulls": [],
-                    "/repos/siyuansdsd/OfferGraph/issues": [],
-                    "/repos/siyuansdsd/OfferGraph/commits": [],
-                    "/repos/siyuansdsd/OfferGraph/releases": [],
+                    "/repos/example-org/OfferGraph/pulls": [],
+                    "/repos/example-org/OfferGraph/issues": [],
+                    "/repos/example-org/OfferGraph/commits": [],
+                    "/repos/example-org/OfferGraph/releases": [],
                 }
             ),
             include_readme=False,
@@ -220,7 +220,7 @@ class GitHubProjectToolsTest(TestCase):
             return_value=report,
         ), patch("tools.github_project.unique_filename", return_value="github.md"):
             command = github_project_inspector.func(
-                "https://github.com/siyuansdsd/OfferGraph",
+                "https://github.com/example-org/OfferGraph",
                 {"files": {}},
                 "call-1",
             )
@@ -229,6 +229,6 @@ class GitHubProjectToolsTest(TestCase):
         self.assertIn("Stars: 12", command.update["files"]["github.md"])
         self.assertEqual(command.update["messages"][0].tool_call_id, "call-1")
         self.assertIn(
-            "Inspected GitHub project siyuansdsd/OfferGraph",
+            "Inspected GitHub project example-org/OfferGraph",
             command.update["messages"][0].content,
         )

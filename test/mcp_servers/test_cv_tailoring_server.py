@@ -63,6 +63,17 @@ class CVTailoringServerTest(TestCase):
             self.assertTrue(link_path.is_symlink())
             self.assertEqual(link_path.resolve(), user_content_dir.resolve())
             self.assertTrue(user_content_dir.exists())
+            for relative_dir in server.CV_MAKER_USER_CONTENT_DIRS:
+                self.assertTrue((user_content_dir / relative_dir).is_dir())
+
+    def test_user_content_structure_creates_required_directories(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            user_content_dir = Path(tmp_dir) / "user_content"
+
+            server.ensure_cv_maker_user_content_structure(user_content_dir)
+
+            for relative_dir in server.CV_MAKER_USER_CONTENT_DIRS:
+                self.assertTrue((user_content_dir / relative_dir).is_dir())
 
     def test_managed_project_root_rejects_private_data_directory_in_source(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -149,7 +160,7 @@ class CVTailoringServerTest(TestCase):
                 output_format="docx",
                 provider="minimax",
                 model="MiniMax-M2.7",
-                github="siyuansdsd",
+                github="example-org",
                 suggestions="font,header",
                 summarize_years=5,
                 no_compile=True,
@@ -165,7 +176,7 @@ class CVTailoringServerTest(TestCase):
         self.assertIn("--model", command)
         self.assertIn("MiniMax-M2.7", command)
         self.assertIn("--github", command)
-        self.assertIn("siyuansdsd", command)
+        self.assertIn("example-org", command)
         self.assertIn("--no-compile", command)
         self.assertIn("--quiet", command)
 

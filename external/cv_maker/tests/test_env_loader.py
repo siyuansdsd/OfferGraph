@@ -16,8 +16,8 @@ class TestEnvLoader(unittest.TestCase):
                 "MINIMAX_API_FORMAT=anthropic\n"
                 "MINIMAX_BASE_URL=https://api.minimax.io/anthropic\n"
                 "MINIMAX_MAX_TOKENS=32768\n"
-                "CANDIDATE_ADDRESS=108 Talavera St, Macquarie University, NSW 2113\n"
-                "CANDIDATE_WEBSITE=www.douglas-yang.com\n",
+                "CANDIDATE_ADDRESS=1 Example Street, Sydney NSW 2000\n"
+                "CANDIDATE_WEBSITE=www.alex-example.dev\n",
                 encoding="utf-8",
             )
 
@@ -28,8 +28,8 @@ class TestEnvLoader(unittest.TestCase):
                 self.assertEqual(os.environ["MINIMAX_API_FORMAT"], "anthropic")
                 self.assertEqual(os.environ["MINIMAX_BASE_URL"], "https://api.minimax.io/anthropic")
                 self.assertEqual(os.environ["MINIMAX_MAX_TOKENS"], "32768")
-                self.assertEqual(os.environ["CANDIDATE_ADDRESS"], "108 Talavera St, Macquarie University, NSW 2113")
-                self.assertEqual(os.environ["CANDIDATE_WEBSITE"], "www.douglas-yang.com")
+                self.assertEqual(os.environ["CANDIDATE_ADDRESS"], "1 Example Street, Sydney NSW 2000")
+                self.assertEqual(os.environ["CANDIDATE_WEBSITE"], "www.alex-example.dev")
 
     def test_load_env_file_does_not_override_existing_environment(self):
         with tempfile.TemporaryDirectory() as tmp:

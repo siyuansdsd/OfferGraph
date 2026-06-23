@@ -155,23 +155,23 @@ GOOGLE_DRIVE_ARCHIVE_REMOTE="gdrive:CV Maker Archive"
 Archive yesterday's generated files:
 
 ```bash
-python archive_drive.py
+python3 archive_drive.py
 ```
 
 Useful variants:
 
 ```bash
 # Preview without upload or delete
-python archive_drive.py --date yesterday --dry-run
+python3 archive_drive.py --date yesterday --dry-run
 
 # Upload but keep local files
-python archive_drive.py --date 2026-05-21 --keep-local
+python3 archive_drive.py --date 2026-05-21 --keep-local
 
-# Archive every generated file dated before today, grouped by date
-python archive_drive.py --before-today
+# Archive every generated file dated two days ago or earlier, grouped by date
+python3 archive_drive.py --older-than-days 2
 
 # Override the configured remote
-python archive_drive.py --remote "gdrive:CV Maker Archive"
+python3 archive_drive.py --remote "gdrive:CV Maker Archive"
 ```
 
 Archive records are saved to `user_content/drive_archive_manifest.json`. The

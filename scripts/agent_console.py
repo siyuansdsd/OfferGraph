@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 from typing import Any
@@ -82,8 +83,8 @@ def parse_args() -> argparse.Namespace:
         "--with-cv-tailoring-mcp",
         action="store_true",
         help=(
-            "Load CV Maker tools. This is automatic for plan-master; keep this "
-            "flag for non-default agents or explicitness."
+            "Expose raw CV Maker MCP tools to the selected agent. Job applications "
+            "normally use the integrated LinkedIn apply tool instead."
         ),
     )
     parser.add_argument(
@@ -168,6 +169,17 @@ def run_agent(
     messages: list[Any] | None = None,
 ) -> Any:
     """Run an agent and print formatted execution updates."""
+    if hasattr(agent, "astream"):
+        return asyncio.run(
+            run_agent_async(
+                agent,
+                agent_name,
+                message,
+                console=console,
+                messages=messages,
+            )
+        )
+
     active_console = console or Console()
     payload = {"messages": messages or [{"role": "user", "content": message}]}
     print_execution_frame(
@@ -208,6 +220,61 @@ def run_agent(
             default_agent=agent_name,
             task=message,
         ):
+            print_execution_frame(active_console, event.frame)
+
+    print_execution_frame(
+        active_console,
+        ExecutionFrame(
+            agent=agent_name,
+            task=message,
+            doing="completed",
+            details="Agent run finished.",
+            next_step="review the output above",
+        ),
+    )
+    return final_result
+
+
+async def run_agent_async(
+    agent: Any,
+    agent_name: str,
+    message: str,
+    *,
+    console: Console | None = None,
+    messages: list[Any] | None = None,
+) -> Any:
+    """Run an async-capable agent and print formatted execution updates."""
+    active_console = console or Console()
+    payload = {"messages": messages or [{"role": "user", "content": message}]}
+    print_execution_frame(
+        active_console,
+        ExecutionFrame(
+            agent=agent_name,
+            task=message,
+            doing="starting",
+            details="Agent run has started.",
+            next_step="wait for the first agent step",
+        ),
+    )
+
+    seen_keys: set[str] = set()
+    final_result: Any = None
+    try:
+        stream = agent.astream(payload, stream_mode="updates")
+    except TypeError:
+        stream = agent.astream(payload)
+
+    async for chunk in stream:
+        final_result = chunk
+        for event in execution_events_from_chunk(
+            chunk,
+            default_agent=agent_name,
+            task=message,
+        ):
+            if event.dedupe_key in seen_keys:
+                continue
+            if event.dedupe_key:
+                seen_keys.add(event.dedupe_key)
             print_execution_frame(active_console, event.frame)
 
     print_execution_frame(
@@ -337,10 +404,7 @@ def load_console_extra_tools(args: argparse.Namespace, console: Console) -> list
     if getattr(args, "without_cv_tailoring_mcp", False):
         return None
 
-    should_load_cv_tools = bool(getattr(args, "with_cv_tailoring_mcp", False)) or (
-        getattr(args, "agent", TOP_LEVEL_AGENT) == TOP_LEVEL_AGENT
-    )
-    if not should_load_cv_tools:
+    if not getattr(args, "with_cv_tailoring_mcp", False):
         return None
 
     transport = getattr(args, "cv_tailoring_transport", DEFAULT_CV_TAILORING_TRANSPORT)

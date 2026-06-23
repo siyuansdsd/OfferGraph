@@ -347,6 +347,74 @@ class TestLLMClient(unittest.TestCase):
         self.assertEqual(cv.experience[0].title, "Software Engineer")
         self.assertEqual(cv.earlier_experience[0].title, "Full Stack Developer")
 
+    def test_tailor_cv_overrides_inspected_title_for_full_stack_jd(self):
+        client = llm_client.LLMClient()
+        fake_json = """
+        {
+            "name": "Test",
+            "title": "Software Engineer",
+            "experience": [
+                {
+                    "title": "Template Role",
+                    "company": "Inspected Pty Ltd",
+                    "location": "Sydney",
+                    "dates": "2024 - Present",
+                    "bullets": []
+                }
+            ],
+            "earlier_experience": [],
+            "competencies": [],
+            "projects": [],
+            "education": [],
+            "certifications": ""
+        }
+        """
+        jd = JobDescription(
+            raw_text="We need a Full Stack Engineer building React, Node.js, APIs, and web applications.",
+            role_title="Full Stack Engineer",
+            key_skills=["React", "Node.js", "TypeScript", "APIs"],
+            summary="Build full-stack product features."
+        )
+
+        with patch.object(client, '_call_llm', return_value=fake_json):
+            cv = client.tailor_cv("Master", jd)
+
+        self.assertEqual(cv.experience[0].title, "Full Stack Developer")
+
+    def test_tailor_cv_overrides_inspected_title_for_ai_jd(self):
+        client = llm_client.LLMClient()
+        fake_json = """
+        {
+            "name": "Test",
+            "title": "Software Engineer",
+            "experience": [
+                {
+                    "title": "Template Role",
+                    "company": "Inspected Pty Ltd",
+                    "location": "Sydney",
+                    "dates": "2024 - Present",
+                    "bullets": []
+                }
+            ],
+            "earlier_experience": [],
+            "competencies": [],
+            "projects": [],
+            "education": [],
+            "certifications": ""
+        }
+        """
+        jd = JobDescription(
+            raw_text="We need a Principal AI Engineer for LLM agents, machine learning systems, and AI platforms.",
+            role_title="Principal AI Engineer",
+            key_skills=["LLM", "AI agents", "Machine Learning", "Python"],
+            summary="Lead AI engineering work."
+        )
+
+        with patch.object(client, '_call_llm', return_value=fake_json):
+            cv = client.tailor_cv("Master", jd)
+
+        self.assertEqual(cv.experience[0].title, "Principal AI Engineer")
+
     def test_select_relevant_title_preserves_compact_slash_terms(self):
         client = llm_client.LLMClient()
         jd = JobDescription(raw_text="JD", role_title="AI Engineer", key_skills=["Machine Learning"], summary="AI role")

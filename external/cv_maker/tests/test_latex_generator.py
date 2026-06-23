@@ -14,9 +14,9 @@ from cv_maker.models import CVData, EarlierExperience, Experience
 class TestMcDowellLatexGenerator(unittest.TestCase):
     def test_render_escapes_latex_and_uses_mcdowell_sections(self):
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="AI Engineer",
-            contact_info="Sydney | douglas@example.com | github.com/douglas_yang",
+            contact_info="Sydney | alex@example.com | github.com/alex_example",
             executive_summary="Built AI & web systems with 90% reliability.",
             competencies=[("Languages:", "Python, C++, TypeScript")],
             experience=[
@@ -37,10 +37,10 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
                     dates="2020 - 2021",
                 )
             ],
-            projects=[("Portfolio:", "github.com/douglas_yang/project")],
+            projects=[("Portfolio:", "github.com/alex_example/project")],
             education=["Master of IT"],
             certifications="AWS Certified",
-            github_url="github.com/douglas_yang",
+            github_url="github.com/alex_example",
         )
 
         tex = McDowellLatexGenerator().render(data)
@@ -63,11 +63,11 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
             tex.index("\\begin{cvsection}{Certifications}"),
             tex.index("\\begin{cvsection}{Languages and Technologies}"),
         )
-        self.assertIn("github.com/douglas\\_yang", tex)
+        self.assertIn("github.com/alex\\_example", tex)
 
     def test_certifications_are_separate_from_education(self):
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="AI Engineer",
             contact_info="test@example.com",
             executive_summary="Summary.",
@@ -95,7 +95,7 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
 
     def test_long_left_title_is_compacted_and_dates_are_kept(self):
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="AI Engineer",
             contact_info="test@example.com",
             executive_summary="Summary.",
@@ -121,9 +121,9 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
 
     def test_contact_info_puts_email_on_own_line(self):
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="AI Engineer",
-            contact_info="Sydney | 0421989935 | developer.douglas.yang@gmail.com | github.com/douglas_yang",
+            contact_info="Sydney | 0400000000 | alex.candidate@example.com | github.com/alex_example",
             executive_summary="Summary.",
             competencies=[],
             experience=[],
@@ -133,15 +133,15 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
 
         self.assertIn("\\address{}", tex)
         self.assertIn(
-            "\\contacts{Sydney \\linebreak 0421989935 \\linebreak developer.douglas.yang@gmail.com \\linebreak github.com/douglas\\_yang}",
+            "\\contacts{Sydney \\linebreak 0400000000 \\linebreak alex.candidate@example.com \\linebreak github.com/alex\\_example}",
             tex,
         )
 
     def test_header_contact_defaults_are_added_to_right_side(self):
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="AI Engineer",
-            contact_info="0421989935 | developer.douglas.yang@gmail.com",
+            contact_info="0400000000 | alex.candidate@example.com",
             executive_summary="Summary.",
             competencies=[],
             experience=[],
@@ -150,8 +150,8 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "CANDIDATE_ADDRESS": "108 Talavera St, Macquarie University, NSW 2113",
-                "CANDIDATE_WEBSITE": "www.douglas-yang.com",
+                "CANDIDATE_ADDRESS": "1 Example Street, Sydney NSW 2000",
+                "CANDIDATE_WEBSITE": "www.alex-example.dev",
             },
             clear=False,
         ):
@@ -159,19 +159,19 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
 
         self.assertIn("\\address{}", tex)
         self.assertIn(
-            "\\contacts{0421989935 \\linebreak developer.douglas.yang@gmail.com \\linebreak "
-            "108 Talavera St, Macquarie University, NSW 2113 \\linebreak www.douglas-yang.com}",
+            "\\contacts{0400000000 \\linebreak alex.candidate@example.com \\linebreak "
+            "1 Example Street, Sydney NSW 2000 \\linebreak www.alex-example.dev}",
             tex,
         )
 
     def test_env_address_replaces_address_from_contact_info(self):
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="AI Engineer",
             contact_info=(
-                "0421989935 | developer.douglas.yang@gmail.com | "
-                "108 Talavera Road, Macquarie Uni, NSW 2109 | "
-                "Macquarie Uni, NSW 2109 | www.douglas-yang.com"
+                "0400000000 | alex.candidate@example.com | "
+                "2 Sample Road, Sydney NSW 2000 | "
+                "Sample Suburb, NSW 2000 | www.alex-example.dev"
             ),
             executive_summary="Summary.",
             competencies=[],
@@ -181,21 +181,21 @@ class TestMcDowellLatexGenerator(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "CANDIDATE_ADDRESS": "108 Talavera St, Macquarie University, NSW 2113",
-                "CANDIDATE_WEBSITE": "www.douglas-yang.com",
+                "CANDIDATE_ADDRESS": "1 Example Street, Sydney NSW 2000",
+                "CANDIDATE_WEBSITE": "www.alex-example.dev",
             },
             clear=False,
         ):
             tex = McDowellLatexGenerator().render(data)
 
-        self.assertNotIn("108 Talavera Road, Macquarie Uni, NSW 2109", tex)
-        self.assertNotIn("Macquarie Uni, NSW 2109", tex)
+        self.assertNotIn("2 Sample Road, Sydney NSW 2000", tex)
+        self.assertNotIn("Sample Suburb, NSW 2000", tex)
         self.assertIn(
-            "\\contacts{0421989935 \\linebreak developer.douglas.yang@gmail.com \\linebreak "
-            "108 Talavera St, Macquarie University, NSW 2113 \\linebreak www.douglas-yang.com}",
+            "\\contacts{0400000000 \\linebreak alex.candidate@example.com \\linebreak "
+            "1 Example Street, Sydney NSW 2000 \\linebreak www.alex-example.dev}",
             tex,
         )
-        self.assertEqual(tex.count("Talavera"), 1)
+        self.assertEqual(tex.count("Example Street"), 1)
 
     def test_generate_writes_tex_without_compiling(self):
         data = CVData(

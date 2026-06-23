@@ -208,6 +208,13 @@ class LLMClient:
             logger.debug(f"Selected slash-separated title '{best_option}' from '{title}' for target role '{jd.role_title}'")
         return best_option
 
+    @classmethod
+    def _select_role_title_for_company(cls, title: str, company: str, jd: JobDescription) -> str:
+        company_tokens = cls._tokens(company)
+        if {"inspected", "pty", "ltd"}.issubset(company_tokens):
+            return cls._select_relevant_title("Full Stack Developer / Principal AI Engineer", jd)
+        return cls._select_relevant_title(title, jd)
+
     def _resolve_auto_provider(self) -> str:
         """
         Detects the best provider from available credentials.
@@ -1046,6 +1053,7 @@ class LLMClient:
         RULES:
         {rule_1}
         2. JOB TITLES: If a role in the Master CV has multiple titles separated by slashes (e.g. "Senior Dev / Lead Architect"), you MUST select ONLY the one title that is most relevant to the Target Role and use it. Do not include the slashes or alternative titles.
+           For Inspected Pty Ltd, choose the role title dynamically from ONLY these two options based on the Target Role and Target Skills: "Full Stack Developer" for web/full-stack/software roles, or "Principal AI Engineer" for AI/ML/LLM/agent roles. Do not copy a fixed template title for this company.
         3. For each of these detailed roles, include 5-7 bullet points. Prioritize technical depth, specific metrics, and leadership achievements.
         4. Rewrite the Executive Summary to be targeted, substantial, and authoritative (keep it 4-6 sentences).
         5. Reorder/Select 'Core Competencies' to match the JD, preserving technical specificity.
@@ -1119,7 +1127,7 @@ class LLMClient:
                 clean_bullets = [to_tuple_2(b) for b in job.get("bullets", [])]
                 
                 exp_list.append(Experience(
-                    title=self._select_relevant_title(job.get("title", ""), jd),
+                    title=self._select_role_title_for_company(job.get("title", ""), job.get("company", ""), jd),
                     company=job.get("company", ""),
                     location=job.get("location", ""),
                     dates=job.get("dates", ""),
@@ -1131,7 +1139,7 @@ class LLMClient:
             earlier_list = []
             for job in raw.get("earlier_experience", []):
                 earlier_list.append(EarlierExperience(
-                    title=self._select_relevant_title(job.get("title", ""), jd),
+                    title=self._select_role_title_for_company(job.get("title", ""), job.get("company", ""), jd),
                     company=job.get("company", ""),
                     summary=job.get("summary", ""),
                     dates=job.get("dates", "")

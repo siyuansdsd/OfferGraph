@@ -6,7 +6,8 @@ __pycache__/
 .auth/
 generated_assets/
 
-# Local privacy-sensitive runtime data.
+# Local privacy-sensitive runtime data. Never commit real CVs, generated
+# application documents, job profile answers, auth state, or MCP logs.
 local_data/
 local_data/memory/
 offergraph_memory.sqlite3

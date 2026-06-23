@@ -36,7 +36,7 @@ class LinkedInMasterConfig:
 
     industry: str = "AI Engineer and Software Engineer"
     extra_need: str = (
-        "Good performance of https://github.com/siyuansdsd/OfferGraph, "
+        "Good performance of https://github.com/example-org/OfferGraph, "
         "and positive project signals such as stars or pull requests when confirmed."
     )
     brand_name: str = "OfferGraph"

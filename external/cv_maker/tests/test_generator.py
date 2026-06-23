@@ -91,10 +91,10 @@ class TestCVGenerator(unittest.TestCase):
         self.assertTrue(mock_format.widow_control)
 
     def test_strip_cover_letter_signature(self):
-        body = "Dear Hiring Manager,\n\nBody paragraph.\n\nSincerely,\nDouglas Yang"
+        body = "Dear Hiring Manager,\n\nBody paragraph.\n\nSincerely,\nAlex Example"
 
         self.assertEqual(
-            _strip_cover_letter_signature(body, "Douglas Yang"),
+            _strip_cover_letter_signature(body, "Alex Example"),
             "Dear Hiring Manager,\n\nBody paragraph."
         )
 
@@ -105,9 +105,9 @@ class TestCVGenerator(unittest.TestCase):
 
         generator = CVGenerator()
         data = CVData(
-            name="Douglas Yang",
+            name="Alex Example",
             title="Engineer",
-            contact_info="douglas@example.com",
+            contact_info="alex@example.com",
             executive_summary="Summary",
             competencies=[],
             experience=[],
@@ -115,13 +115,13 @@ class TestCVGenerator(unittest.TestCase):
 
         generator.generate_cover_letter(
             data,
-            "Dear Hiring Manager,\n\nBody paragraph.\n\nSincerely,\nDouglas Yang",
+            "Dear Hiring Manager,\n\nBody paragraph.\n\nSincerely,\nAlex Example",
             "cover.docx",
         )
 
         paragraph_texts = [args[0] for args, _ in mock_doc.add_paragraph.call_args_list if args]
         self.assertEqual(paragraph_texts.count("Sincerely,"), 1)
-        self.assertEqual(paragraph_texts.count("Douglas Yang"), 2)  # header name + final signature
+        self.assertEqual(paragraph_texts.count("Alex Example"), 2)  # header name + final signature
 
 if __name__ == '__main__':
     unittest.main()

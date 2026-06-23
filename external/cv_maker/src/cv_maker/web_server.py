@@ -493,8 +493,13 @@ def archive_payload() -> dict[str, Any]:
         for item in archives
         if isinstance(item, dict) and isinstance(item.get("files"), list)
     )
+    try:
+        remote = drive_archive.default_remote()
+    except Exception:
+        remote = ""
     return {
         "archives": archives,
+        "default_remote": remote,
         "summary": {
             "folders": len(archives),
             "files": total_files,
@@ -538,11 +543,13 @@ def run_archive(payload: dict[str, Any]) -> dict[str, Any]:
         _ARCHIVE_LOCK.release()
 
 
-def run_archive_before_today(payload: dict[str, Any]) -> dict[str, Any]:
+def run_archive_old_files(payload: dict[str, Any]) -> dict[str, Any]:
     if not _ARCHIVE_LOCK.acquire(blocking=False):
         raise RuntimeError("Another archive job is already running.")
     try:
-        results = drive_archive.archive_generated_files_before(
+        min_age_days = int(payload.get("min_age_days") or drive_archive.DEFAULT_MIN_ARCHIVE_AGE_DAYS)
+        results = drive_archive.archive_generated_files_at_least_days_old(
+            min_age_days=min_age_days,
             remote=str(payload.get("remote") or "").strip() or None,
             source_dir=GENERATED_DIR,
             manifest_file=ARCHIVE_MANIFEST_FILE,
@@ -568,7 +575,7 @@ def run_archive_before_today(payload: dict[str, Any]) -> dict[str, Any]:
             "files": files,
             "log": "\n".join(
                 [
-                    "Archive before today",
+                    f"Archive files at least {min_age_days} days old",
                     f"Batches: {len(results)}",
                     f"Files archived: {len(files)}",
                     *[
@@ -580,6 +587,10 @@ def run_archive_before_today(payload: dict[str, Any]) -> dict[str, Any]:
         }
     finally:
         _ARCHIVE_LOCK.release()
+
+
+def run_archive_before_today(payload: dict[str, Any]) -> dict[str, Any]:
+    return run_archive_old_files(payload)
 
 
 def _application_heatmap(records: list[dict[str, Any]], days: int = 365) -> list[dict[str, Any]]:
@@ -1167,14 +1178,14 @@ INDEX_HTML = r"""<!doctype html>
         <div class="panel-head">
           <div class="panel-title">Drive Archive</div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="pixel-btn blue" id="archivePastBtn">Before Today</button>
-            <button class="pixel-btn blue" id="archiveBtn">Archive</button>
+            <button class="pixel-btn blue" id="archivePastBtn">2+ Days</button>
+            <button class="pixel-btn blue" id="archiveBtn">Date Only</button>
           </div>
         </div>
         <div class="body">
           <div class="settings">
             <div class="field"><label>Date</label><input id="archiveDate" value="yesterday"></div>
-            <div class="field"><label>Remote</label><input id="archiveRemote" placeholder="gdrive:CV Maker Archive"></div>
+            <div class="field"><label>Remote</label><input id="archiveRemote" placeholder="GDrive:CV Maker Archive"></div>
             <div class="field"><label>Mode</label><select id="archiveMode"><option value="delete">upload + delete local</option><option value="keep">upload + keep local</option><option value="dry">dry run</option></select></div>
           </div>
           <div class="archive-list" id="archiveList"></div>
@@ -1275,6 +1286,9 @@ INDEX_HTML = r"""<!doctype html>
     function renderArchives(archivesPayload) {
       const archives = (archivesPayload && archivesPayload.archives) || [];
       state.archives = archives;
+      if (archivesPayload && archivesPayload.default_remote && !$("archiveRemote").value) {
+        $("archiveRemote").value = archivesPayload.default_remote;
+      }
       const target = $("archiveList");
       target.innerHTML = "";
       if (!archives.length) {
@@ -1407,8 +1421,8 @@ INDEX_HTML = r"""<!doctype html>
 
     async function runArchive() {
       $("archiveBtn").disabled = true;
-      $("runState").textContent = "Archiving generated files...";
-      $("terminal").textContent = "Running archive command.\n";
+      $("runState").textContent = "Archiving selected date...";
+      $("terminal").textContent = "Running archive command for the selected date only.\n";
       try {
         const mode = $("archiveMode").value;
         const response = await fetch("/api/archive", {
@@ -1422,13 +1436,13 @@ INDEX_HTML = r"""<!doctype html>
           })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Archive failed.");
-        $("terminal").textContent = data.log || "Archive complete.";
-        $("runState").textContent = "Archive complete";
+        if (!response.ok) throw new Error(data.error || "Selected date archive failed.");
+        $("terminal").textContent = data.log || "Selected date archive complete.";
+        $("runState").textContent = "Selected date archive complete";
         await loadDashboard();
       } catch (error) {
         $("terminal").textContent += `\nERROR: ${error.message}`;
-        $("runState").textContent = "Archive failed";
+        $("runState").textContent = "Selected date archive failed";
       } finally {
         $("archiveBtn").disabled = false;
       }
@@ -1437,24 +1451,25 @@ INDEX_HTML = r"""<!doctype html>
     async function runArchivePast() {
       $("archivePastBtn").disabled = true;
       $("archiveBtn").disabled = true;
-      $("runState").textContent = "Archiving files before today...";
-      $("terminal").textContent = "Uploading files dated before today to Google Drive, then deleting local copies after link capture.\n";
+      $("runState").textContent = "Archiving files at least 2 days old...";
+      $("terminal").textContent = "Uploading files dated two days ago or earlier to Google Drive, then deleting local copies after link capture.\n";
       try {
-        const response = await fetch("/api/archive-before-today", {
+        const response = await fetch("/api/archive-old-files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            remote: $("archiveRemote").value
+            remote: $("archiveRemote").value,
+            min_age_days: 2
           })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Archive before today failed.");
-        $("terminal").textContent = data.log || "Archive before today complete.";
-        $("runState").textContent = "Archive before today complete";
+        if (!response.ok) throw new Error(data.error || "Archive 2+ day files failed.");
+        $("terminal").textContent = data.log || "Archive 2+ day files complete.";
+        $("runState").textContent = "Archive 2+ day files complete";
         await loadDashboard();
       } catch (error) {
         $("terminal").textContent += `\nERROR: ${error.message}`;
-        $("runState").textContent = "Archive before today failed";
+        $("runState").textContent = "Archive 2+ day files failed";
       } finally {
         $("archivePastBtn").disabled = false;
         $("archiveBtn").disabled = false;
@@ -1577,10 +1592,10 @@ class CVWebHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json(500, {"error": str(exc)})
             return
-        if parsed.path == "/api/archive-before-today":
+        if parsed.path in {"/api/archive-old-files", "/api/archive-before-today"}:
             try:
                 payload = self._read_json_body()
-                self._send_json(200, run_archive_before_today(payload))
+                self._send_json(200, run_archive_old_files(payload))
             except Exception as exc:
                 self._send_json(500, {"error": str(exc)})
             return
