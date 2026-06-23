@@ -68,19 +68,29 @@ GITHUB_TOKEN=...
 
 ## Agent Console
 
-Run the LinkedIn agent from a local console and choose `MiniMax-M2.7` or `MiniMax-M2.5`:
+Start the top-level OfferGraph agent:
 
 ```bash
-./.venv/bin/python scripts/agent_console.py --agent linkedin-master
+./offergraph
 ```
 
-Non-interactive example:
+This opens a chat loop controlled by `plan-master`. It loads CV Tailoring tools
+over stdio by default, so you do not need a second terminal for normal use.
+
+Exit with `/exit`.
+
+Run a single non-interactive task:
 
 ```bash
-./.venv/bin/python scripts/agent_console.py \
-  --agent linkedin-master \
-  --model MiniMax-M2.7 \
-  --message "Write a concise OfferGraph LinkedIn post."
+./offergraph --message "Find AI Engineer roles and prepare applications."
+```
+
+Optional advanced examples:
+
+```bash
+./offergraph --agent linkedin-master --message "Write a concise OfferGraph LinkedIn post."
+./offergraph --choose-model
+./offergraph --without-cv-tailoring-mcp
 ```
 
 ## Tool Approval Mode
@@ -146,7 +156,8 @@ CV_MAKER_USER_CONTENT_DIR=local_data/cv_maker/user_content
 CV_TAILORING_MCP_URL=http://127.0.0.1:8765/mcp
 ```
 
-Run the CV Maker MCP service in terminal 1:
+For normal local use, `./offergraph` loads CV Maker through stdio automatically.
+If you need to run the MCP service separately for debugging, start it in terminal 1:
 
 ```bash
 ./.venv/bin/python -m mcp_servers.cv_tailoring.server \
@@ -156,27 +167,15 @@ Run the CV Maker MCP service in terminal 1:
   --path /mcp
 ```
 
-Run the agent system in terminal 2 and load CV Maker through MCP:
+Then run the agent system in terminal 2 and point it at the HTTP MCP service:
 
 ```bash
-./.venv/bin/python scripts/agent_console.py \
-  --agent plan-master \
-  --with-cv-tailoring-mcp
+./offergraph --cv-tailoring-transport streamable_http
 ```
 
 At runtime, the agent process is the MCP client and the CV Maker process is the
 MCP server. The agent uses only the MCP tools; it does not import CV Maker
 internals directly.
-
-For local development only, the agent can also spawn the MCP server as a stdio
-subprocess:
-
-```bash
-CV_TAILORING_MCP_CLIENT_TRANSPORT=stdio \
-./.venv/bin/python scripts/agent_console.py \
-  --agent plan-master \
-  --with-cv-tailoring-mcp
-```
 
 Provided tools:
 
