@@ -52,7 +52,7 @@ def build_cv_tailoring_mcp_connection(
     return {
         "transport": "stdio",
         "command": str(python_executable or sys.executable),
-        "args": ["-m", CV_TAILORING_MCP_MODULE],
+        "args": ["-m", CV_TAILORING_MCP_MODULE, "--transport", "stdio"],
         "cwd": str(cwd or PROJECT_ROOT),
     }
 

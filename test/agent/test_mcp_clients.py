@@ -29,7 +29,7 @@ class MCPClientsTest(TestCase):
         self.assertEqual(connection["command"], "/tmp/python")
         self.assertEqual(
             connection["args"],
-            ["-m", "mcp_servers.cv_tailoring.server"],
+            ["-m", "mcp_servers.cv_tailoring.server", "--transport", "stdio"],
         )
         self.assertEqual(connection["cwd"], "/tmp/project")
 

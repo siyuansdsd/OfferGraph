@@ -69,6 +69,7 @@ mcp = FastMCP(
         "Use this server to tailor resumes and cover letters for a job description. "
         "Never submit job applications; return generated file paths for user review."
     ),
+    log_level="WARNING",
     host=get_env(CV_TAILORING_MCP_HOST_ENV, DEFAULT_CV_TAILORING_MCP_HOST)
     or DEFAULT_CV_TAILORING_MCP_HOST,
     port=int(
